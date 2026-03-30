@@ -1,0 +1,22 @@
+services:
+  bot-trader:
+    build: .
+    container_name: bot-trader
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=file:/app/data/bot-trader.db
+    volumes:
+      - bot-data:/app/data
+    healthcheck:
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health" ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  bot-data:

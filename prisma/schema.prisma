@@ -1,0 +1,85 @@
+// Prisma schema for BOT Trader MVP V1
+// Tables: signals, orders, positions, daily_pnl, settings
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Signal {
+  id              Int      @id @default(autoincrement())
+  strategyId      String   @map("strategy_id")
+  exchange        String
+  symbol          String
+  timeframe       String
+  price           Float
+  signalTimestamp String   @map("signal_timestamp")
+  barClose        Boolean  @map("bar_close")
+  event           String
+  idempotencyHash String   @unique @map("idempotency_hash")
+  processedAt     DateTime @default(now()) @map("processed_at")
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  orders Order[]
+
+  @@map("signals")
+}
+
+model Order {
+  id           Int      @id @default(autoincrement())
+  signalId     Int      @map("signal_id")
+  side         String
+  qty          Float
+  price        Float
+  orderType    String   @default("Market") @map("order_type")
+  bybitOrderId String?  @map("bybit_order_id")
+  status       String   @default("pending")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  signal Signal @relation(fields: [signalId], references: [id])
+
+  @@map("orders")
+}
+
+model Position {
+  id         Int      @id @default(autoincrement())
+  symbol     String
+  side       String
+  entryPrice Float    @map("entry_price")
+  qty        Float
+  currentQty Float    @map("current_qty")
+  slPrice    Float?   @map("sl_price")
+  beApplied  Boolean  @default(false) @map("be_applied")
+  status     String   @default("open")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@map("positions")
+}
+
+model DailyPnl {
+  id                 Int      @id @default(autoincrement())
+  date               String   @unique
+  realizedPnl        Float    @default(0) @map("realized_pnl")
+  unrealizedPnl      Float    @default(0) @map("unrealized_pnl")
+  isKillSwitchActive Boolean  @default(false) @map("is_kill_switch_active")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  @@map("daily_pnl")
+}
+
+model Setting {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("settings")
+}
