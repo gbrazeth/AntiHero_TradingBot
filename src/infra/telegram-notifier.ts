@@ -9,45 +9,53 @@ import { env } from '../config/env.js';
  */
 export class TelegramNotifier {
     private readonly token: string;
-    private readonly chatId: string;
+    private readonly chatIds: string[];
     private readonly configured: boolean;
 
     constructor(private readonly logger: FastifyBaseLogger) {
         this.token = env.TELEGRAM_BOT_TOKEN;
-        this.chatId = env.TELEGRAM_CHAT_ID;
-        this.configured = Boolean(this.token && this.chatId);
+        
+        // Collect all available chat IDs
+        this.chatIds = [env.TELEGRAM_CHAT_ID, env.TELEGRAM_CHAT_ID_2]
+            .filter((id) => id !== '');
+
+        this.configured = Boolean(this.token && this.chatIds.length > 0);
 
         if (!this.configured) {
-            this.logger.warn('TelegramNotifier: token/chatId not set — notifications disabled');
+            this.logger.warn('TelegramNotifier: token/chatIds not set — notifications disabled');
         }
     }
 
-    /** Send a plain text message. */
+    /** Send a message to all configured chat IDs. */
     async send(message: string): Promise<void> {
         if (!this.configured) return;
 
-        try {
-            const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
-            const body = {
-                chat_id: this.chatId,
-                text: message,
-                parse_mode: 'Markdown',
-            };
+        // Use Promise.all to send to all IDs in parallel
+        await Promise.all(
+            this.chatIds.map(async (chatId) => {
+                try {
+                    const url = `https://api.telegram.org/bot${this.token}/sendMessage`;
+                    const body = {
+                        chat_id: chatId,
+                        text: message,
+                        parse_mode: 'Markdown',
+                    };
 
-            const res = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
 
-            if (!res.ok) {
-                const err = await res.text();
-                this.logger.error({ err }, 'Telegram API error');
-            }
-        } catch (err) {
-            // Never throw — notifications must not block trading
-            this.logger.error({ err }, 'Failed to send Telegram notification');
-        }
+                    if (!res.ok) {
+                        const err = await res.text();
+                        this.logger.error({ err, chatId }, 'Telegram API error');
+                    }
+                } catch (err) {
+                    this.logger.error({ err, chatId }, 'Failed to send Telegram notification');
+                }
+            }),
+        );
     }
 
     // ── Convenience helpers ──────────────────────────────────────────────

@@ -24,6 +24,7 @@ const envSchema = z.object({
     // Telegram
     TELEGRAM_BOT_TOKEN: z.string().default(''),
     TELEGRAM_CHAT_ID: z.string().default(''),
+    TELEGRAM_CHAT_ID_2: z.string().default(''),
 
     // Trading Parameters
     SL_PCT: z.coerce.number().default(0.01),
