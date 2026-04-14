@@ -6,3 +6,7 @@ dist/
 *.db
 *.db-journal
 .next/
+src/generated/
+test-binance.ts
+test-keys.ts
+*.pdf
