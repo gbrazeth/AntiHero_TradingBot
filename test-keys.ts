@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
-const apiKey = 'jlifSdPymgr40UW1hM';
-const apiSecret = 'nbdQxnL935BFdc04FLE2ja2YFv5xR8vR3gHi';
+const apiKey = 'EuVXlIQRlOc7zQ89Ts';
+const apiSecret = 'NvqOGKfvc5EKMbe6ITE009SwsxwCfZBOAeuv';
 
 async function testEndpoint(baseUrl: string) {
     console.log(`Testing ${baseUrl} ...`);
@@ -25,6 +25,7 @@ async function testEndpoint(baseUrl: string) {
         });
         const data = await res.json();
         console.log(`Response from ${baseUrl}:`, data.retCode === 0 ? '✅ SUCCESS' : `❌ FAILED: [${data.retCode}] ${data.retMsg}`);
+        if(data.retCode === 0) console.log(JSON.stringify(data.result, null, 2));
     } catch (e) {
         console.error(`Error connecting to ${baseUrl}:`, e);
     }
@@ -32,8 +33,6 @@ async function testEndpoint(baseUrl: string) {
 
 async function run() {
     await testEndpoint('https://api-testnet.bybit.com');
-    await testEndpoint('https://api-demo.bybit.com');
-    await testEndpoint('https://api.bybit.com');
 }
 
 run();

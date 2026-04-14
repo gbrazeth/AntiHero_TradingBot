@@ -47,7 +47,7 @@ export type OrderMinAggregateOutputType = {
   qty: number | null
   price: number | null
   orderType: string | null
-  bybitOrderId: string | null
+  exchangeOrderId: string | null
   status: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -60,7 +60,7 @@ export type OrderMaxAggregateOutputType = {
   qty: number | null
   price: number | null
   orderType: string | null
-  bybitOrderId: string | null
+  exchangeOrderId: string | null
   status: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -73,7 +73,7 @@ export type OrderCountAggregateOutputType = {
   qty: number
   price: number
   orderType: number
-  bybitOrderId: number
+  exchangeOrderId: number
   status: number
   createdAt: number
   updatedAt: number
@@ -102,7 +102,7 @@ export type OrderMinAggregateInputType = {
   qty?: true
   price?: true
   orderType?: true
-  bybitOrderId?: true
+  exchangeOrderId?: true
   status?: true
   createdAt?: true
   updatedAt?: true
@@ -115,7 +115,7 @@ export type OrderMaxAggregateInputType = {
   qty?: true
   price?: true
   orderType?: true
-  bybitOrderId?: true
+  exchangeOrderId?: true
   status?: true
   createdAt?: true
   updatedAt?: true
@@ -128,7 +128,7 @@ export type OrderCountAggregateInputType = {
   qty?: true
   price?: true
   orderType?: true
-  bybitOrderId?: true
+  exchangeOrderId?: true
   status?: true
   createdAt?: true
   updatedAt?: true
@@ -228,7 +228,7 @@ export type OrderGroupByOutputType = {
   qty: number
   price: number
   orderType: string
-  bybitOrderId: string | null
+  exchangeOrderId: string | null
   status: string
   createdAt: Date
   updatedAt: Date
@@ -264,7 +264,7 @@ export type OrderWhereInput = {
   qty?: Prisma.FloatFilter<"Order"> | number
   price?: Prisma.FloatFilter<"Order"> | number
   orderType?: Prisma.StringFilter<"Order"> | string
-  bybitOrderId?: Prisma.StringNullableFilter<"Order"> | string | null
+  exchangeOrderId?: Prisma.StringNullableFilter<"Order"> | string | null
   status?: Prisma.StringFilter<"Order"> | string
   createdAt?: Prisma.DateTimeFilter<"Order"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Order"> | Date | string
@@ -278,7 +278,7 @@ export type OrderOrderByWithRelationInput = {
   qty?: Prisma.SortOrder
   price?: Prisma.SortOrder
   orderType?: Prisma.SortOrder
-  bybitOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
+  exchangeOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -295,7 +295,7 @@ export type OrderWhereUniqueInput = Prisma.AtLeast<{
   qty?: Prisma.FloatFilter<"Order"> | number
   price?: Prisma.FloatFilter<"Order"> | number
   orderType?: Prisma.StringFilter<"Order"> | string
-  bybitOrderId?: Prisma.StringNullableFilter<"Order"> | string | null
+  exchangeOrderId?: Prisma.StringNullableFilter<"Order"> | string | null
   status?: Prisma.StringFilter<"Order"> | string
   createdAt?: Prisma.DateTimeFilter<"Order"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Order"> | Date | string
@@ -309,7 +309,7 @@ export type OrderOrderByWithAggregationInput = {
   qty?: Prisma.SortOrder
   price?: Prisma.SortOrder
   orderType?: Prisma.SortOrder
-  bybitOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
+  exchangeOrderId?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -330,7 +330,7 @@ export type OrderScalarWhereWithAggregatesInput = {
   qty?: Prisma.FloatWithAggregatesFilter<"Order"> | number
   price?: Prisma.FloatWithAggregatesFilter<"Order"> | number
   orderType?: Prisma.StringWithAggregatesFilter<"Order"> | string
-  bybitOrderId?: Prisma.StringNullableWithAggregatesFilter<"Order"> | string | null
+  exchangeOrderId?: Prisma.StringNullableWithAggregatesFilter<"Order"> | string | null
   status?: Prisma.StringWithAggregatesFilter<"Order"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Order"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Order"> | Date | string
@@ -341,7 +341,7 @@ export type OrderCreateInput = {
   qty: number
   price: number
   orderType?: string
-  bybitOrderId?: string | null
+  exchangeOrderId?: string | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -355,7 +355,7 @@ export type OrderUncheckedCreateInput = {
   qty: number
   price: number
   orderType?: string
-  bybitOrderId?: string | null
+  exchangeOrderId?: string | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -366,7 +366,7 @@ export type OrderUpdateInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -380,7 +380,7 @@ export type OrderUncheckedUpdateInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -393,7 +393,7 @@ export type OrderCreateManyInput = {
   qty: number
   price: number
   orderType?: string
-  bybitOrderId?: string | null
+  exchangeOrderId?: string | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -404,7 +404,7 @@ export type OrderUpdateManyMutationInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -417,7 +417,7 @@ export type OrderUncheckedUpdateManyInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -440,7 +440,7 @@ export type OrderCountOrderByAggregateInput = {
   qty?: Prisma.SortOrder
   price?: Prisma.SortOrder
   orderType?: Prisma.SortOrder
-  bybitOrderId?: Prisma.SortOrder
+  exchangeOrderId?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -460,7 +460,7 @@ export type OrderMaxOrderByAggregateInput = {
   qty?: Prisma.SortOrder
   price?: Prisma.SortOrder
   orderType?: Prisma.SortOrder
-  bybitOrderId?: Prisma.SortOrder
+  exchangeOrderId?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -473,7 +473,7 @@ export type OrderMinOrderByAggregateInput = {
   qty?: Prisma.SortOrder
   price?: Prisma.SortOrder
   orderType?: Prisma.SortOrder
-  bybitOrderId?: Prisma.SortOrder
+  exchangeOrderId?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -537,7 +537,7 @@ export type OrderCreateWithoutSignalInput = {
   qty: number
   price: number
   orderType?: string
-  bybitOrderId?: string | null
+  exchangeOrderId?: string | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -549,7 +549,7 @@ export type OrderUncheckedCreateWithoutSignalInput = {
   qty: number
   price: number
   orderType?: string
-  bybitOrderId?: string | null
+  exchangeOrderId?: string | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -590,7 +590,7 @@ export type OrderScalarWhereInput = {
   qty?: Prisma.FloatFilter<"Order"> | number
   price?: Prisma.FloatFilter<"Order"> | number
   orderType?: Prisma.StringFilter<"Order"> | string
-  bybitOrderId?: Prisma.StringNullableFilter<"Order"> | string | null
+  exchangeOrderId?: Prisma.StringNullableFilter<"Order"> | string | null
   status?: Prisma.StringFilter<"Order"> | string
   createdAt?: Prisma.DateTimeFilter<"Order"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Order"> | Date | string
@@ -602,7 +602,7 @@ export type OrderCreateManySignalInput = {
   qty: number
   price: number
   orderType?: string
-  bybitOrderId?: string | null
+  exchangeOrderId?: string | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -613,7 +613,7 @@ export type OrderUpdateWithoutSignalInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -625,7 +625,7 @@ export type OrderUncheckedUpdateWithoutSignalInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -637,7 +637,7 @@ export type OrderUncheckedUpdateManyWithoutSignalInput = {
   qty?: Prisma.FloatFieldUpdateOperationsInput | number
   price?: Prisma.FloatFieldUpdateOperationsInput | number
   orderType?: Prisma.StringFieldUpdateOperationsInput | string
-  bybitOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
+  exchangeOrderId?: Prisma.NullableStringFieldUpdateOperationsInput | string | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -652,7 +652,7 @@ export type OrderSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs = 
   qty?: boolean
   price?: boolean
   orderType?: boolean
-  bybitOrderId?: boolean
+  exchangeOrderId?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -666,7 +666,7 @@ export type OrderSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   qty?: boolean
   price?: boolean
   orderType?: boolean
-  bybitOrderId?: boolean
+  exchangeOrderId?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -680,7 +680,7 @@ export type OrderSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Extensi
   qty?: boolean
   price?: boolean
   orderType?: boolean
-  bybitOrderId?: boolean
+  exchangeOrderId?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -694,13 +694,13 @@ export type OrderSelectScalar = {
   qty?: boolean
   price?: boolean
   orderType?: boolean
-  bybitOrderId?: boolean
+  exchangeOrderId?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type OrderOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "signalId" | "side" | "qty" | "price" | "orderType" | "bybitOrderId" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["order"]>
+export type OrderOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "signalId" | "side" | "qty" | "price" | "orderType" | "exchangeOrderId" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["order"]>
 export type OrderInclude<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   signal?: boolean | Prisma.SignalDefaultArgs<ExtArgs>
 }
@@ -723,7 +723,7 @@ export type $OrderPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs 
     qty: number
     price: number
     orderType: string
-    bybitOrderId: string | null
+    exchangeOrderId: string | null
     status: string
     createdAt: Date
     updatedAt: Date
@@ -1157,7 +1157,7 @@ export interface OrderFieldRefs {
   readonly qty: Prisma.FieldRef<"Order", 'Float'>
   readonly price: Prisma.FieldRef<"Order", 'Float'>
   readonly orderType: Prisma.FieldRef<"Order", 'String'>
-  readonly bybitOrderId: Prisma.FieldRef<"Order", 'String'>
+  readonly exchangeOrderId: Prisma.FieldRef<"Order", 'String'>
   readonly status: Prisma.FieldRef<"Order", 'String'>
   readonly createdAt: Prisma.FieldRef<"Order", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Order", 'DateTime'>

@@ -15,6 +15,8 @@ export interface RiskResult {
     reason?: string;
     qty: number;
     slPrice: number;
+    tp1Price: number;
+    tp2Price: number;
 }
 
 export interface BreakEvenResult {
@@ -48,7 +50,7 @@ export class RiskManager {
 
         if (dailyPnl?.isKillSwitchActive) {
             this.logger.warn({ date: today }, 'Kill switch active — entry blocked');
-            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0 };
+            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tp1Price: 0, tp2Price: 0 };
         }
 
         if (dailyPnl) {
@@ -66,37 +68,28 @@ export class RiskManager {
                     reason: `Daily drawdown limit reached (${(lossRatio * 100).toFixed(2)}%)`,
                     qty: 0,
                     slPrice: 0,
+                    tp1Price: 0,
+                    tp2Price: 0,
                 };
             }
         }
 
-        // 2. Existing open position check — avoid double entry
-        const openPos = await prisma.position.findFirst({
-            where: { symbol: params.symbol, status: 'open' },
-        });
-
-        if (openPos) {
-            this.logger.warn({ posId: openPos.id }, 'Existing open position — entry blocked');
-            return {
-                allowed: false,
-                reason: 'Already in a position for this symbol',
-                qty: 0,
-                slPrice: 0,
-            };
-        }
+        // 2. Existing open position check moved to StrategyEngine for auto-reversal support
 
         // 3. Calculate qty (fixed_usdt mode)
         const qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
 
-        // 4. Calculate SL price
+        // 4. Calculate SL price & TP prices
         const slPrice = this.calcSl(params.side, params.entryPrice);
+        const tp1Price = this.calcTp(params.side, params.entryPrice, env.TP1_PCT);
+        const tp2Price = this.calcTp(params.side, params.entryPrice, env.TP2_PCT);
 
         this.logger.info(
-            { symbol: params.symbol, side: params.side, qty, slPrice },
+            { symbol: params.symbol, side: params.side, qty, slPrice, tp1Price, tp2Price },
             'Risk check passed — entry allowed',
         );
 
-        return { allowed: true, qty, slPrice };
+        return { allowed: true, qty, slPrice, tp1Price, tp2Price };
     }
 
     /**
@@ -109,7 +102,7 @@ export class RiskManager {
         pct: number;
         entryPrice: number;
     }): { allowed: boolean; qtyToClose: number; reason?: string } {
-        const qtyToClose = parseFloat((params.currentQty * params.pct).toFixed(4));
+        const qtyToClose = parseFloat((params.currentQty * params.pct).toFixed(3));
         const remaining = params.currentQty - qtyToClose;
         const remainingPct = remaining / params.currentQty;
 
@@ -132,8 +125,8 @@ export class RiskManager {
     calcBreakEven(side: 'LONG' | 'SHORT', entryPrice: number): number {
         const buffer = entryPrice * env.BE_BUFFER;
         return side === 'LONG'
-            ? parseFloat((entryPrice + buffer).toFixed(4))
-            : parseFloat((entryPrice - buffer).toFixed(4));
+            ? parseFloat((entryPrice + buffer).toFixed(2))
+            : parseFloat((entryPrice - buffer).toFixed(2));
     }
 
     /**
@@ -155,7 +148,7 @@ export class RiskManager {
      * e.g. 50 USDT at 1850 ETH = 0.027 ETH
      */
     private calcQty(usdtAmount: number, price: number): number {
-        return parseFloat((usdtAmount / price).toFixed(4));
+        return parseFloat((usdtAmount / price).toFixed(3));
     }
 
     /**
@@ -166,8 +159,20 @@ export class RiskManager {
     private calcSl(side: 'LONG' | 'SHORT', entryPrice: number): number {
         const slDelta = entryPrice * env.SL_PCT;
         return side === 'LONG'
-            ? parseFloat((entryPrice - slDelta).toFixed(4))
-            : parseFloat((entryPrice + slDelta).toFixed(4));
+            ? parseFloat((entryPrice - slDelta).toFixed(2))
+            : parseFloat((entryPrice + slDelta).toFixed(2));
+    }
+
+    /**
+     * Take-profit price based on pct target.
+     * LONG TP = entry * (1 + pct)
+     * SHORT TP = entry * (1 - pct)
+     */
+    private calcTp(side: 'LONG' | 'SHORT', entryPrice: number, pct: number): number {
+        const tpDelta = entryPrice * pct;
+        return side === 'LONG'
+            ? parseFloat((entryPrice + tpDelta).toFixed(2))
+            : parseFloat((entryPrice - tpDelta).toFixed(2));
     }
 
     private todayStr(): string {

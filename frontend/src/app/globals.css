@@ -184,6 +184,8 @@ h1, h2, h3, h4, h5, h6 {
 .text-danger { color: var(--danger); }
 .text-warning { color: var(--warning); }
 .text-accent { color: var(--accent-color); }
+.text-secondary { color: var(--text-secondary); }
+.font-bold { font-weight: bold; }
 
 .info-row {
   display: flex;
@@ -351,4 +353,61 @@ h1, h2, h3, h4, h5, h6 {
 .footer-timestamp {
   text-align: center;
   margin-top: 2rem;
+}
+
+/* ─── History Table classes ──────────────── */
+
+.mt-6 {
+  margin-top: 1.5rem;
+}
+
+.history-skeleton {
+  padding: 2rem;
+}
+
+.history-empty {
+  padding: 2rem 0;
+  opacity: 0.7;
+}
+
+.history-table-container {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+.history-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.history-tr {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.history-thead-tr {
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.history-th {
+  padding: 0.75rem 0;
+}
+
+.history-td {
+  padding: 0.75rem 0;
+}
+
+.badge-sm {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+}
+
+.text-small {
+  font-size: 0.9rem;
+}
+
+.capitalize {
+  text-transform: capitalize;
 }

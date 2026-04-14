@@ -18,9 +18,25 @@ interface BalanceData {
   availableBalance: string;
 }
 
+interface HistoryPosition {
+  id: number;
+  symbol: string;
+  side: string;
+  entryPrice: number;
+  qty: number;
+  currentQty: number;
+  slPrice: number | null;
+  beApplied: boolean;
+  status: string;
+  realizedPnl: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export default function Dashboard() {
   const [position, setPosition] = useState<PositionData | 'FLAT' | null>(null);
   const [balance, setBalance] = useState<BalanceData[]>([]);
+  const [history, setHistory] = useState<HistoryPosition[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +48,7 @@ export default function Dashboard() {
       
       // Fetch Position
       try {
-        const posRes = await fetch('http://localhost:3000/status/position');
+        const posRes = await fetch('http://localhost:3333/status/position');
         if (!posRes.ok) {
           const detail = await posRes.json().catch(() => ({}));
           throw new Error(detail.message || 'Failed to fetch position');
@@ -46,15 +62,25 @@ export default function Dashboard() {
 
       // Fetch Balance
       try {
-        const balRes = await fetch('http://localhost:3000/status/balance');
+        const balRes = await fetch('http://localhost:3333/status/balance');
         if (!balRes.ok) {
-          const detail = await balRes.json().catch(() => ({}));
-          throw new Error(detail.message || 'Failed to fetch balance');
+           throw new Error('Failed to fetch balance');
         }
         const balData = await balRes.json();
         setBalance(balData.balance);
       } catch (err) {
         console.error('Balance fetch error:', err);
+      }
+      
+      // Fetch History
+      try {
+        const histRes = await fetch('http://localhost:3333/status/history');
+        if (histRes.ok) {
+          const histData = await histRes.json();
+          setHistory(histData.history || []);
+        }
+      } catch (err) {
+        console.error('History fetch error:', err);
       }
       
       setError(null);
@@ -81,7 +107,7 @@ export default function Dashboard() {
       <header className="header">
         <div className="header-title">
           <Activity color="var(--accent-color)" size={32} />
-          <h1>Trader Bot Dashboard</h1>
+          <h1>AntiHero Trading Bot Dashboard</h1>
         </div>
         
         <div className="header-actions">
@@ -108,7 +134,7 @@ export default function Dashboard() {
           </div>
           <p>{error}</p>
           <p className="stat-label card-error-hint">
-            Make sure the bot backend (localhost:3000) is running.
+            Make sure the bot backend (localhost:3333) is running.
           </p>
         </div>
       )}
@@ -200,6 +226,63 @@ export default function Dashboard() {
             </>
           )}
         </div>
+      </div>
+
+      {/* HISTORY CARD */}
+      <div className="card mt-6">
+        <div className="card-header">
+          <Activity size={20} className="text-secondary" />
+          <span className="card-title">Recent Transactions</span>
+        </div>
+        
+        {loading ? (
+          <div className="skeleton skeleton-text history-skeleton"></div>
+        ) : history.length === 0 ? (
+          <div className="position-empty history-empty">
+            <span className="stat-label">No transaction history yet.</span>
+          </div>
+        ) : (
+          <div className="history-table-container">
+            <table className="history-table">
+              <thead>
+                <tr className="history-thead-tr">
+                  <th className="history-th">Started On</th>
+                  <th>Symbol</th>
+                  <th>Side</th>
+                  <th>Entry Price</th>
+                  <th>Size</th>
+                  <th>Status</th>
+                  <th>Realized PNL</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((pos) => (
+                  <tr key={pos.id} className="history-tr">
+                    <td className="history-td">
+                      {new Date(pos.createdAt).toLocaleString()}
+                    </td>
+                    <td><span className="stat-value text-small">{pos.symbol}</span></td>
+                    <td>
+                      <span className={`badge badge-sm ${pos.side === 'BUY' ? 'long' : 'short'}`}>
+                        {pos.side === 'BUY' ? 'LONG' : 'SHORT'}
+                      </span>
+                    </td>
+                    <td>${Number(pos.entryPrice).toFixed(2)}</td>
+                    <td>{pos.qty}</td>
+                    <td className="capitalize">
+                      <span className={pos.status === 'open' ? 'text-success' : 'text-secondary'}>
+                        {pos.status}
+                      </span>
+                    </td>
+                    <td className={`font-bold ${pos.realizedPnl ? (pos.realizedPnl > 0 ? 'text-success' : 'text-danger') : ''}`}>
+                      {pos.status === 'open' ? 'Live on Chart' : (pos.realizedPnl ? `${pos.realizedPnl > 0 ? '+' : ''}$${Number(pos.realizedPnl).toFixed(2)}` : '$0.00')}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       
       <div className="footer-timestamp">

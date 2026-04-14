@@ -36,7 +36,7 @@ model Order {
   qty          Float
   price        Float
   orderType    String   @default("Market") @map("order_type")
-  bybitOrderId String?  @map("bybit_order_id")
+  exchangeOrderId String?  @map("exchange_order_id")
   status       String   @default("pending")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
@@ -55,6 +55,7 @@ model Position {
   currentQty Float    @map("current_qty")
   slPrice    Float?   @map("sl_price")
   beApplied  Boolean  @default(false) @map("be_applied")
+  realizedPnl Float?   @map("realized_pnl")
   status     String   @default("open")
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")

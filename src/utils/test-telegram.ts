@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { FastifyBaseLogger } from 'fastify';
 import pino from 'pino';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';

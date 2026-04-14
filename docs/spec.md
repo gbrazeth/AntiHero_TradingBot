@@ -8,7 +8,7 @@
 
 ## 1) Objetivo
 
-Construir um bot trader automatizado que receba sinais do TradingView via webhook e execute operações em **Bybit Futures Testnet** para **ETHUSDT**, em **One-way**, **Cross**, usando **Market orders** sempre.
+Construir um bot trader automatizado que receba sinais do TradingView via webhook e execute operações em **Binance Futures Testnet** para **ETHUSDT**, em **One-way**, **Cross**, usando **Market orders** sempre.
 
 O MVP deve ter:
 - execução confiável e determinística
@@ -21,7 +21,7 @@ O MVP deve ter:
 
 ## 2) Configuração do MVP
 
-- Exchange: Bybit Futures Testnet
+- Exchange: Binance Futures Testnet
 - Symbol: ETHUSDT
 - Timeframe (inicial): 1h
 - Position mode: One-way (positionIdx = 0)
@@ -103,7 +103,7 @@ Kill Switch:
 
 ---
 
-## 6) Integração Bybit (V5 Testnet)
+## 6) Integração Binance (FAPI Testnet)
 
 Endpoints:
 - /v5/order/create

@@ -32,6 +32,7 @@ export type PositionAvgAggregateOutputType = {
   qty: number | null
   currentQty: number | null
   slPrice: number | null
+  realizedPnl: number | null
 }
 
 export type PositionSumAggregateOutputType = {
@@ -40,6 +41,7 @@ export type PositionSumAggregateOutputType = {
   qty: number | null
   currentQty: number | null
   slPrice: number | null
+  realizedPnl: number | null
 }
 
 export type PositionMinAggregateOutputType = {
@@ -51,6 +53,7 @@ export type PositionMinAggregateOutputType = {
   currentQty: number | null
   slPrice: number | null
   beApplied: boolean | null
+  realizedPnl: number | null
   status: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -65,6 +68,7 @@ export type PositionMaxAggregateOutputType = {
   currentQty: number | null
   slPrice: number | null
   beApplied: boolean | null
+  realizedPnl: number | null
   status: string | null
   createdAt: Date | null
   updatedAt: Date | null
@@ -79,6 +83,7 @@ export type PositionCountAggregateOutputType = {
   currentQty: number
   slPrice: number
   beApplied: number
+  realizedPnl: number
   status: number
   createdAt: number
   updatedAt: number
@@ -92,6 +97,7 @@ export type PositionAvgAggregateInputType = {
   qty?: true
   currentQty?: true
   slPrice?: true
+  realizedPnl?: true
 }
 
 export type PositionSumAggregateInputType = {
@@ -100,6 +106,7 @@ export type PositionSumAggregateInputType = {
   qty?: true
   currentQty?: true
   slPrice?: true
+  realizedPnl?: true
 }
 
 export type PositionMinAggregateInputType = {
@@ -111,6 +118,7 @@ export type PositionMinAggregateInputType = {
   currentQty?: true
   slPrice?: true
   beApplied?: true
+  realizedPnl?: true
   status?: true
   createdAt?: true
   updatedAt?: true
@@ -125,6 +133,7 @@ export type PositionMaxAggregateInputType = {
   currentQty?: true
   slPrice?: true
   beApplied?: true
+  realizedPnl?: true
   status?: true
   createdAt?: true
   updatedAt?: true
@@ -139,6 +148,7 @@ export type PositionCountAggregateInputType = {
   currentQty?: true
   slPrice?: true
   beApplied?: true
+  realizedPnl?: true
   status?: true
   createdAt?: true
   updatedAt?: true
@@ -240,6 +250,7 @@ export type PositionGroupByOutputType = {
   currentQty: number
   slPrice: number | null
   beApplied: boolean
+  realizedPnl: number | null
   status: string
   createdAt: Date
   updatedAt: Date
@@ -277,6 +288,7 @@ export type PositionWhereInput = {
   currentQty?: Prisma.FloatFilter<"Position"> | number
   slPrice?: Prisma.FloatNullableFilter<"Position"> | number | null
   beApplied?: Prisma.BoolFilter<"Position"> | boolean
+  realizedPnl?: Prisma.FloatNullableFilter<"Position"> | number | null
   status?: Prisma.StringFilter<"Position"> | string
   createdAt?: Prisma.DateTimeFilter<"Position"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Position"> | Date | string
@@ -291,6 +303,7 @@ export type PositionOrderByWithRelationInput = {
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrderInput | Prisma.SortOrder
   beApplied?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -308,6 +321,7 @@ export type PositionWhereUniqueInput = Prisma.AtLeast<{
   currentQty?: Prisma.FloatFilter<"Position"> | number
   slPrice?: Prisma.FloatNullableFilter<"Position"> | number | null
   beApplied?: Prisma.BoolFilter<"Position"> | boolean
+  realizedPnl?: Prisma.FloatNullableFilter<"Position"> | number | null
   status?: Prisma.StringFilter<"Position"> | string
   createdAt?: Prisma.DateTimeFilter<"Position"> | Date | string
   updatedAt?: Prisma.DateTimeFilter<"Position"> | Date | string
@@ -322,6 +336,7 @@ export type PositionOrderByWithAggregationInput = {
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrderInput | Prisma.SortOrder
   beApplied?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrderInput | Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -344,6 +359,7 @@ export type PositionScalarWhereWithAggregatesInput = {
   currentQty?: Prisma.FloatWithAggregatesFilter<"Position"> | number
   slPrice?: Prisma.FloatNullableWithAggregatesFilter<"Position"> | number | null
   beApplied?: Prisma.BoolWithAggregatesFilter<"Position"> | boolean
+  realizedPnl?: Prisma.FloatNullableWithAggregatesFilter<"Position"> | number | null
   status?: Prisma.StringWithAggregatesFilter<"Position"> | string
   createdAt?: Prisma.DateTimeWithAggregatesFilter<"Position"> | Date | string
   updatedAt?: Prisma.DateTimeWithAggregatesFilter<"Position"> | Date | string
@@ -357,6 +373,7 @@ export type PositionCreateInput = {
   currentQty: number
   slPrice?: number | null
   beApplied?: boolean
+  realizedPnl?: number | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -371,6 +388,7 @@ export type PositionUncheckedCreateInput = {
   currentQty: number
   slPrice?: number | null
   beApplied?: boolean
+  realizedPnl?: number | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -384,6 +402,7 @@ export type PositionUpdateInput = {
   currentQty?: Prisma.FloatFieldUpdateOperationsInput | number
   slPrice?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   beApplied?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  realizedPnl?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -398,6 +417,7 @@ export type PositionUncheckedUpdateInput = {
   currentQty?: Prisma.FloatFieldUpdateOperationsInput | number
   slPrice?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   beApplied?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  realizedPnl?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -412,6 +432,7 @@ export type PositionCreateManyInput = {
   currentQty: number
   slPrice?: number | null
   beApplied?: boolean
+  realizedPnl?: number | null
   status?: string
   createdAt?: Date | string
   updatedAt?: Date | string
@@ -425,6 +446,7 @@ export type PositionUpdateManyMutationInput = {
   currentQty?: Prisma.FloatFieldUpdateOperationsInput | number
   slPrice?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   beApplied?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  realizedPnl?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -439,6 +461,7 @@ export type PositionUncheckedUpdateManyInput = {
   currentQty?: Prisma.FloatFieldUpdateOperationsInput | number
   slPrice?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   beApplied?: Prisma.BoolFieldUpdateOperationsInput | boolean
+  realizedPnl?: Prisma.NullableFloatFieldUpdateOperationsInput | number | null
   status?: Prisma.StringFieldUpdateOperationsInput | string
   createdAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
   updatedAt?: Prisma.DateTimeFieldUpdateOperationsInput | Date | string
@@ -453,6 +476,7 @@ export type PositionCountOrderByAggregateInput = {
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrder
   beApplied?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -464,6 +488,7 @@ export type PositionAvgOrderByAggregateInput = {
   qty?: Prisma.SortOrder
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrder
 }
 
 export type PositionMaxOrderByAggregateInput = {
@@ -475,6 +500,7 @@ export type PositionMaxOrderByAggregateInput = {
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrder
   beApplied?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -489,6 +515,7 @@ export type PositionMinOrderByAggregateInput = {
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrder
   beApplied?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrder
   status?: Prisma.SortOrder
   createdAt?: Prisma.SortOrder
   updatedAt?: Prisma.SortOrder
@@ -500,6 +527,7 @@ export type PositionSumOrderByAggregateInput = {
   qty?: Prisma.SortOrder
   currentQty?: Prisma.SortOrder
   slPrice?: Prisma.SortOrder
+  realizedPnl?: Prisma.SortOrder
 }
 
 export type NullableFloatFieldUpdateOperationsInput = {
@@ -521,6 +549,7 @@ export type PositionSelect<ExtArgs extends runtime.Types.Extensions.InternalArgs
   currentQty?: boolean
   slPrice?: boolean
   beApplied?: boolean
+  realizedPnl?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -535,6 +564,7 @@ export type PositionSelectCreateManyAndReturn<ExtArgs extends runtime.Types.Exte
   currentQty?: boolean
   slPrice?: boolean
   beApplied?: boolean
+  realizedPnl?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -549,6 +579,7 @@ export type PositionSelectUpdateManyAndReturn<ExtArgs extends runtime.Types.Exte
   currentQty?: boolean
   slPrice?: boolean
   beApplied?: boolean
+  realizedPnl?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
@@ -563,12 +594,13 @@ export type PositionSelectScalar = {
   currentQty?: boolean
   slPrice?: boolean
   beApplied?: boolean
+  realizedPnl?: boolean
   status?: boolean
   createdAt?: boolean
   updatedAt?: boolean
 }
 
-export type PositionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "symbol" | "side" | "entryPrice" | "qty" | "currentQty" | "slPrice" | "beApplied" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["position"]>
+export type PositionOmit<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = runtime.Types.Extensions.GetOmit<"id" | "symbol" | "side" | "entryPrice" | "qty" | "currentQty" | "slPrice" | "beApplied" | "realizedPnl" | "status" | "createdAt" | "updatedAt", ExtArgs["result"]["position"]>
 
 export type $PositionPayload<ExtArgs extends runtime.Types.Extensions.InternalArgs = runtime.Types.Extensions.DefaultArgs> = {
   name: "Position"
@@ -582,6 +614,7 @@ export type $PositionPayload<ExtArgs extends runtime.Types.Extensions.InternalAr
     currentQty: number
     slPrice: number | null
     beApplied: boolean
+    realizedPnl: number | null
     status: string
     createdAt: Date
     updatedAt: Date
@@ -1016,6 +1049,7 @@ export interface PositionFieldRefs {
   readonly currentQty: Prisma.FieldRef<"Position", 'Float'>
   readonly slPrice: Prisma.FieldRef<"Position", 'Float'>
   readonly beApplied: Prisma.FieldRef<"Position", 'Boolean'>
+  readonly realizedPnl: Prisma.FieldRef<"Position", 'Float'>
   readonly status: Prisma.FieldRef<"Position", 'String'>
   readonly createdAt: Prisma.FieldRef<"Position", 'DateTime'>
   readonly updatedAt: Prisma.FieldRef<"Position", 'DateTime'>

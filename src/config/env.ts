@@ -12,10 +12,10 @@ const envSchema = z.object({
     // Database
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
-    // Bybit
-    BYBIT_API_KEY: z.string().default(''),
-    BYBIT_API_SECRET: z.string().default(''),
-    BYBIT_BASE_URL: z.string().url().default('https://api-testnet.bybit.com'),
+    // Binance
+    BINANCE_API_KEY: z.string().default(''),
+    BINANCE_API_SECRET: z.string().default(''),
+    BINANCE_BASE_URL: z.string().url().default('https://testnet.binancefuture.com'),
     MOCK_EXCHANGE: z
         .string()
         .default('false')
@@ -28,6 +28,8 @@ const envSchema = z.object({
     // Trading Parameters
     SL_PCT: z.coerce.number().default(0.01),
     BE_BUFFER: z.coerce.number().default(0.0005),
+    TP1_PCT: z.coerce.number().default(0.015),
+    TP2_PCT: z.coerce.number().default(0.03),
     DAILY_DD_LIMIT: z.coerce.number().default(0.04),
     CAP_EXPOSURE_PCT: z.coerce.number().default(0.10),
     QTY_MODE: z.enum(['fixed_usdt']).default('fixed_usdt'),

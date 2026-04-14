@@ -1,6 +1,6 @@
 # BOT Trader MVP V1
 
-> Bot automatizado que recebe sinais do TradingView via webhook e executa operações em **Bybit Futures Testnet** para **ETHUSDT**.
+> Bot automatizado que recebe sinais do TradingView via webhook e executa operações robustas em **Binance Futures Testnet / Demo** para **ETHUSDT** e altcoins. Inclui sistema de Dashboard Full-Stack e suporte para Auto-Reversão, e Take Profits Múltiplos (TP1/TP2).
 
 ## Requisitos
 
@@ -19,22 +19,30 @@ npm install
 
 ```bash
 cp .env.example .env
-# Edite .env com seus valores (WEBHOOK_TOKEN obrigatório)
+# Edite .env com seus valores (WEBHOOK_TOKEN e chaves da Binance são obrigatórios)
 ```
 
 ### 3. Criar o banco de dados (SQLite)
 
 ```bash
-npx prisma migrate dev --name init
+npx prisma db push && npx prisma generate
 ```
 
-### 4. Rodar em desenvolvimento
+### 4. Rodar o Backend (API)
 
 ```bash
 npm run dev
+# O servidor iniciará em http://localhost:3333.
 ```
 
-O servidor iniciará em `http://localhost:3000`.
+### 5. Rodar o Frontend (Painel Dashboard)
+
+```bash
+cd frontend
+npm install
+npm run dev
+# O Painel Dashboard iniciará de forma independente em http://localhost:3002.
+```
 
 ## Setup com Docker
 
@@ -43,99 +51,72 @@ O servidor iniciará em `http://localhost:3000`.
 docker compose up --build -d
 ```
 
-## Endpoints
+## Endpoints da API
 
 ### `GET /health`
 
-Health check.
+Verificador de pulso e saúde da aplicação.
 
 ```bash
-curl http://localhost:3000/health
+curl http://localhost:3333/health
 ```
 
 ### `POST /webhook/tradingview`
 
-Recebe sinais do TradingView.
+Recebe os sinais oficiais e agnósticos a Timeframe do TradingView.
 
 **Headers:**
 - `Content-Type: application/json`
 - `X-WEBHOOK-TOKEN: <seu-token>`
 
-**Payload:**
+**Payload Base:**
 ```json
 {
   "strategy_id": "PEDRO_MVP_V1",
-  "exchange": "BYBIT_TESTNET",
+  "exchange": "BINANCE_TESTNET",
   "symbol": "ETHUSDT",
   "timeframe": "60",
   "price": 2845.5,
   "timestamp": "2026-02-25T12:00:00Z",
   "bar_close": true,
-  "event": "MACD_ENTRY_LONG"
+  "event": "MACD_ENTRY_LONG",
+  "trend_1d": "UP"
 }
-```
-
-**Exemplo:**
-```bash
-curl -X POST http://localhost:3000/webhook/tradingview \
-  -H "Content-Type: application/json" \
-  -H "X-WEBHOOK-TOKEN: dev-token-change-me" \
-  -d '{
-    "strategy_id": "PEDRO_MVP_V1",
-    "exchange": "BYBIT_TESTNET",
-    "symbol": "ETHUSDT",
-    "timeframe": "60",
-    "price": 2845.5,
-    "timestamp": "2026-02-25T12:00:00Z",
-    "bar_close": true,
-    "event": "MACD_ENTRY_LONG"
-  }'
 ```
 
 ## Eventos Válidos
 
 | Evento | Descrição |
 |--------|-----------|
-| `MACD_ENTRY_LONG` | Entrada comprada |
-| `MACD_ENTRY_SHORT` | Entrada vendida |
-| `VMC_PARTIAL_25_LONG` | Parcial 25% da posição long |
-| `VMC_PARTIAL_50_LONG` | Parcial 50% da posição long |
-| `VMC_PARTIAL_25_SHORT` | Parcial 25% da posição short |
-| `VMC_PARTIAL_50_SHORT` | Parcial 50% da posição short |
+| `MACD_ENTRY_LONG` | Abertura de operação Comprada (e reversão automática de eventuais Shorts) |
+| `MACD_ENTRY_SHORT` | Abertura de operação Vendida (e reversão automática de eventuais Longs) |
+| `VMC_PARTIAL_25_LONG` | Recolhimento (Take Profit virtual) de 25% da posição comprada |
+| `VMC_PARTIAL_50_LONG` | Recolhimento (Take Profit virtual) de 50% da posição comprada |
+| `VMC_PARTIAL_25_SHORT` | Recolhimento de 25% da posição vendida |
+| `VMC_PARTIAL_50_SHORT` | Recolhimento de 50% da posição vendida |
 
-## Scripts
+## Estrutura Desacoplada e Governança Clean Architecture
 
-| Comando | Descrição |
-|---------|-----------|
-| `npm run dev` | Inicia em modo desenvolvimento (hot reload) |
-| `npm run build` | Compila TypeScript para JavaScript |
-| `npm start` | Roda a versão compilada |
-| `npm run lint` | Roda ESLint |
-| `npm run prisma:migrate` | Cria/aplica migrações |
-| `npm run prisma:studio` | Abre o Prisma Studio (UI do banco) |
-
-## Estrutura do Projeto
+A pasta `src` foi moldada com excelência. 
 
 ```
 src/
-├── index.ts                    # Bootstrap Fastify
+├── index.ts                    # Bootstrap Fastify Integrado
 ├── config/
-│   └── env.ts                  # Validação de env com Zod
+│   └── env.ts                  # Validação rigorosa de ambiente via Zod
 ├── domain/
-│   ├── strategy-engine.ts      # Máquina de estados (placeholder)
-│   └── risk-manager.ts         # Controle de risco (placeholder)
+│   ├── strategy-engine.ts      # Máquina de estados (Auto-Reversões e Cálculos de PNL)
+│   └── risk-manager.ts         # Oráculo de Risco (Limites diários)
 ├── infra/
-│   ├── bybit-adapter.ts        # Integração Bybit (placeholder)
-│   ├── telegram-notifier.ts    # Notificações Telegram (placeholder)
-│   └── prisma.ts               # PrismaClient singleton
+│   ├── binance-adapter.ts      # Adapter para a Binance via Rest API / FAPI (Substituível agnosticamente)
+│   ├── telegram-notifier.ts    # Transmissão assíncrona ao Telegram do Contratante
+│   └── prisma.ts               # Instância SQLite unificada
 ├── webhook/
-│   ├── webhook.controller.ts   # Rota + auth + idempotência
-│   ├── webhook.schema.ts       # Schemas Zod
-│   └── webhook.service.ts      # Processamento de sinais
+│   ├── webhook.controller.ts   # Rotas de recepção, health e Status UI
+│   ├── webhook.schema.ts       # Restrições matemáticas Zod
+│   └── webhook.service.ts      # Filtro de repetições (Idempotência Hash)
 └── utils/
-    └── hash.ts                 # Hash de idempotência
+    └── hash.ts                 # Algoritmo de Hashing criptográfico
 ```
 
-## Spec Completo
-
-Consulte [`docs/spec.md`](docs/spec.md) para a especificação completa do projeto.
+A arquitetura foi projetada de forma a isolar completamente as decisões lógicas do `strategy-engine` do servidor financeiro. Migrar deste Testnet Binance para Bybit ou Kucoin no futuro exigirá apenas a adesão de um novo Adapter.

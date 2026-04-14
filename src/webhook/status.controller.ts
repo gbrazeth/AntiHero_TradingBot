@@ -1,26 +1,27 @@
 import type { FastifyInstance } from 'fastify';
-import { BybitAdapter } from '../infra/bybit-adapter.js';
+import { BinanceAdapter } from '../infra/binance-adapter.js';
+import { prisma } from '../infra/prisma.js';
 
 /**
- * Status routes — check Bybit connection and current position.
+ * Status routes — check Binance connection and current position.
  */
 export async function statusController(app: FastifyInstance): Promise<void> {
-    const bybit = new BybitAdapter(app.log);
+    const exchange = new BinanceAdapter(app.log);
 
     /**
      * GET /status/position
-     * Fetches the current ETHUSDT position from Bybit Testnet.
+     * Fetches the current ETHUSDT position from Binance Testnet.
      * Use this to verify the API keys are working.
      */
     app.get('/status/position', async (_request, reply) => {
         try {
-            const position = await bybit.getPosition('ETHUSDT');
+            const position = await exchange.getPosition('ETHUSDT');
 
             if (!position) {
                 return reply.status(200).send({
                     status: 'ok',
                     position: 'FLAT',
-                    message: 'No open ETHUSDT position on Bybit Testnet',
+                    message: 'No open ETHUSDT position on Binance Testnet',
                 });
             }
 
@@ -37,7 +38,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            app.log.error({ err }, 'Failed to fetch position from Bybit');
+            app.log.error({ err }, 'Failed to fetch position from Binance');
             return reply.status(500).send({
                 status: 'error',
                 message,
@@ -47,15 +48,32 @@ export async function statusController(app: FastifyInstance): Promise<void> {
 
     /**
      * GET /status/balance
-     * Fetches wallet balance from Bybit Testnet.
+     * Fetches wallet balance from Binance Testnet.
      */
     app.get('/status/balance', async (_request, reply) => {
         try {
-            const balance = await bybit.getWalletBalance();
+            const balance = await exchange.getWalletBalance();
             return reply.status(200).send({ status: 'ok', balance });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            app.log.error({ err }, 'Failed to fetch balance from Bybit');
+            app.log.error({ err }, 'Failed to fetch balance from Binance');
+            return reply.status(500).send({ status: 'error', message });
+        }
+    });
+    /**
+     * GET /status/history
+     * Fetches the recent 20 positions history from the bot's local SQLite ledger.
+     */
+    app.get('/status/history', async (_request, reply) => {
+        try {
+            const history = await prisma.position.findMany({
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+            });
+            return reply.status(200).send({ status: 'ok', history });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            app.log.error({ err }, 'Failed to fetch history from database');
             return reply.status(500).send({ status: 'error', message });
         }
     });

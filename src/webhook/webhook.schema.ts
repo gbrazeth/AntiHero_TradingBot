@@ -21,8 +21,8 @@ export type WebhookEvent = (typeof VALID_EVENTS)[number];
 export const webhookPayloadSchema = z.object({
     strategy_id: z.string().min(1, 'strategy_id is required'),
 
-    exchange: z.literal('BYBIT_TESTNET', {
-        message: 'exchange must be BYBIT_TESTNET',
+    exchange: z.literal('BINANCE_TESTNET', {
+        message: 'exchange must be BINANCE_TESTNET',
     }),
 
     symbol: z.literal('ETHUSDT', {
@@ -42,6 +42,8 @@ export const webhookPayloadSchema = z.object({
     event: z.enum(VALID_EVENTS, {
         message: `event must be one of: ${VALID_EVENTS.join(', ')}`,
     }),
+
+    trend_1d: z.enum(['UP', 'DOWN', 'NONE']).optional(),
 });
 
 export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;

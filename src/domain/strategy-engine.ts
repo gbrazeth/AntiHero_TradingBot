@@ -2,7 +2,7 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { WebhookPayload, WebhookEvent } from '../webhook/webhook.schema.js';
 import { prisma } from '../infra/prisma.js';
 import { RiskManager } from './risk-manager.js';
-import { BybitAdapter } from '../infra/bybit-adapter.js';
+import { BinanceAdapter } from '../infra/binance-adapter.js';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';
 
 // ─── State Machine ────────────────────────────────────────────────────────
@@ -28,12 +28,12 @@ import { TelegramNotifier } from '../infra/telegram-notifier.js';
  */
 export class StrategyEngine {
     private readonly risk: RiskManager;
-    private readonly bybit: BybitAdapter;
+    private readonly exchange: BinanceAdapter;
     private readonly telegram: TelegramNotifier;
 
     constructor(private readonly logger: FastifyBaseLogger) {
         this.risk = new RiskManager(logger);
-        this.bybit = new BybitAdapter(logger);
+        this.exchange = new BinanceAdapter(logger);
         this.telegram = new TelegramNotifier(logger);
     }
 
@@ -90,7 +90,60 @@ export class StrategyEngine {
     }): Promise<void> {
         const { payload, signalId, side } = params;
 
-        // 1. Risk check
+        // 1. Trend Filter Check
+        if (payload.trend_1d && payload.trend_1d !== 'NONE') {
+            const isCounterTrend = 
+                (side === 'LONG' && payload.trend_1d === 'DOWN') ||
+                (side === 'SHORT' && payload.trend_1d === 'UP');
+                
+            if (isCounterTrend) {
+                this.logger.warn(
+                    { side, trend: payload.trend_1d },
+                    'Entry blocked by 1D Trend Filter (counter-trend)'
+                );
+                return;
+            }
+        }
+
+        const exchangeSide: 'BUY' | 'SELL' = side === 'LONG' ? 'BUY' : 'SELL';
+
+        // 2. Existing open position check & Auto-Reversal
+        const openPos = await prisma.position.findFirst({
+            where: { symbol: payload.symbol, status: 'open' },
+        });
+
+        if (openPos) {
+            if (openPos.side === exchangeSide) {
+                this.logger.warn({ posId: openPos.id }, 'Already in a position for this symbol/side — ignoring');
+                return;
+            } else {
+                this.logger.info({ posId: openPos.id }, 'Opposite position detected. Executing Auto-Reversal.');
+                
+                // Close previous position on Binance
+                await this.exchange.placeOrder({
+                    symbol: payload.symbol,
+                    side: exchangeSide, // to close a SHORT we BUY
+                    qty: String(openPos.currentQty),
+                    reduceOnly: true,
+                });
+                
+                // Calculate PNL based on closing the previous position
+                const closedQty = openPos.currentQty;
+                const pnl = openPos.side === 'BUY' 
+                    ? (payload.price - openPos.entryPrice) * closedQty 
+                    : (openPos.entryPrice - payload.price) * closedQty;
+                
+                const currentRealized = openPos.realizedPnl || 0;
+                
+                // Mark closed in DB
+                await prisma.position.update({
+                    where: { id: openPos.id },
+                    data: { status: 'closed', currentQty: 0, realizedPnl: currentRealized + pnl },
+                });
+            }
+        }
+
+        // 3. Risk check
         const risk = await this.risk.checkEntry({
             symbol: payload.symbol,
             side,
@@ -102,39 +155,31 @@ export class StrategyEngine {
             return;
         }
 
-        const bybitSide: 'Buy' | 'Sell' = side === 'LONG' ? 'Buy' : 'Sell';
-
-        // 2. Place order on Bybit
-        const bybitOrderId = await this.bybit.placeOrder({
+        // 4. Place order on Binance
+        const exchangeOrderId = await this.exchange.placeOrder({
             symbol: payload.symbol,
-            side: bybitSide,
+            side: exchangeSide,
             qty: String(risk.qty),
         });
 
-        // 3. Set initial stop loss
-        await this.bybit.setTradingStop({
-            symbol: payload.symbol,
-            stopLoss: String(risk.slPrice),
-        });
-
-        // 4. Persist order to DB (linked to signal)
+        // 5. Persist order to DB (linked to signal)
         await prisma.order.create({
             data: {
                 signalId,
-                side: bybitSide,
+                side: exchangeSide,
                 qty: risk.qty,
                 price: payload.price,
                 orderType: 'Market',
-                bybitOrderId,
+                exchangeOrderId,
                 status: 'filled',
             },
         });
 
-        // 5. Persist position
+        // 6. Persist position
         await prisma.position.create({
             data: {
                 symbol: payload.symbol,
-                side: bybitSide,
+                side: exchangeSide,
                 entryPrice: payload.price,
                 qty: risk.qty,
                 currentQty: risk.qty,
@@ -142,6 +187,43 @@ export class StrategyEngine {
                 status: 'open',
             },
         });
+
+        // 7. Set initial stop loss (Using Algo API format with qty)
+        try {
+            await this.exchange.setTradingStop({
+                symbol: payload.symbol,
+                side: exchangeSide,
+                stopLoss: String(risk.slPrice),
+                qty: String(risk.qty),
+            });
+        } catch (err) {
+            this.logger.warn({ err }, 'Failed to set initial stop loss');
+        }
+
+        // 8. Set Take Profits natively
+        try {
+            const tp1Qty = parseFloat((risk.qty * 0.5).toFixed(3));
+            const tp2Qty = parseFloat((risk.qty - tp1Qty).toFixed(3));
+
+            if (tp1Qty > 0) {
+                await this.exchange.setTakeProfit({
+                    symbol: payload.symbol,
+                    side: exchangeSide,
+                    tpPrice: String(risk.tp1Price),
+                    qty: String(tp1Qty),
+                });
+            }
+            if (tp2Qty > 0) {
+                await this.exchange.setTakeProfit({
+                    symbol: payload.symbol,
+                    side: exchangeSide,
+                    tpPrice: String(risk.tp2Price),
+                    qty: String(tp2Qty),
+                });
+            }
+        } catch (err) {
+            this.logger.warn({ err }, 'Failed to set take profit limit orders');
+        }
 
         // 6. Notify
         await this.telegram.notifyEntry({
@@ -154,7 +236,7 @@ export class StrategyEngine {
         });
 
         this.logger.info(
-            { side, symbol: payload.symbol, qty: risk.qty, slPrice: risk.slPrice, bybitOrderId },
+            { side, symbol: payload.symbol, qty: risk.qty, slPrice: risk.slPrice, exchangeOrderId },
             '✅ Entry executed successfully',
         );
     }
@@ -173,7 +255,7 @@ export class StrategyEngine {
         const position = await prisma.position.findFirst({
             where: {
                 symbol: payload.symbol,
-                side: side === 'LONG' ? 'Buy' : 'Sell',
+                side: side === 'LONG' ? 'BUY' : 'SELL',
                 status: 'open',
             },
         });
@@ -198,11 +280,11 @@ export class StrategyEngine {
             return;
         }
 
-        const closeSide: 'Buy' | 'Sell' = side === 'LONG' ? 'Sell' : 'Buy';
+        const closeSide: 'BUY' | 'SELL' = side === 'LONG' ? 'SELL' : 'BUY';
         const qtyToClose = String(partial.qtyToClose);
 
-        // 3. Place reduce-only order on Bybit
-        const bybitOrderId = await this.bybit.placeOrder({
+        // 3. Place reduce-only order on Binance
+        const exchangeOrderId = await this.exchange.placeOrder({
             symbol: payload.symbol,
             side: closeSide,
             qty: qtyToClose,
@@ -217,7 +299,7 @@ export class StrategyEngine {
                 qty: partial.qtyToClose,
                 price: payload.price,
                 orderType: 'Market',
-                bybitOrderId,
+                exchangeOrderId,
                 status: 'filled',
             },
         });
@@ -229,10 +311,17 @@ export class StrategyEngine {
         let newSlPrice = position.slPrice ?? position.entryPrice;
         if (isFirstPartial) {
             newSlPrice = this.risk.calcBreakEven(side, position.entryPrice);
-            await this.bybit.setTradingStop({
-                symbol: payload.symbol,
-                stopLoss: String(newSlPrice),
-            });
+            const entrySide: 'BUY' | 'SELL' = side === 'LONG' ? 'BUY' : 'SELL';
+            try {
+                await this.exchange.setTradingStop({
+                    symbol: payload.symbol,
+                    side: entrySide,
+                    stopLoss: String(newSlPrice),
+                    qty: String(newQty),
+                });
+            } catch (err) {
+                this.logger.warn({ err }, 'Failed to set break-even stop loss via Binance API');
+            }
 
             await this.telegram.notifyBreakEven({
                 symbol: payload.symbol,
@@ -245,6 +334,14 @@ export class StrategyEngine {
             );
         }
 
+        // Calculate PNL for this partial transaction
+        const closedQty = partial.qtyToClose;
+        const pnl = position.side === 'BUY'
+            ? (payload.price - position.entryPrice) * closedQty
+            : (position.entryPrice - payload.price) * closedQty;
+
+        const currentRealized = position.realizedPnl || 0;
+
         // 6. Update position in DB
         const positionFullyClosed = newQty <= 0;
         await prisma.position.update({
@@ -253,6 +350,7 @@ export class StrategyEngine {
                 currentQty: positionFullyClosed ? 0 : newQty,
                 slPrice: newSlPrice,
                 beApplied: true,
+                realizedPnl: currentRealized + pnl,
                 status: positionFullyClosed ? 'closed' : 'open',
             },
         });
@@ -273,7 +371,7 @@ export class StrategyEngine {
                 qtyToClose,
                 newQty,
                 beApplied: isFirstPartial,
-                bybitOrderId,
+                exchangeOrderId,
             },
             `✅ Partial exit ${pct * 100}% executed`,
         );

@@ -839,7 +839,7 @@ export const OrderScalarFieldEnum = {
   qty: 'qty',
   price: 'price',
   orderType: 'orderType',
-  bybitOrderId: 'bybitOrderId',
+  exchangeOrderId: 'exchangeOrderId',
   status: 'status',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
@@ -857,6 +857,7 @@ export const PositionScalarFieldEnum = {
   currentQty: 'currentQty',
   slPrice: 'slPrice',
   beApplied: 'beApplied',
+  realizedPnl: 'realizedPnl',
   status: 'status',
   createdAt: 'createdAt',
   updatedAt: 'updatedAt'
