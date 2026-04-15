@@ -1,0 +1,140 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AntiHero Trading Bot — TradingView Webhook Connector v1.0
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Este indicador lê o MACD (Entradas) e o VMC/Momentum (Saídas Parciais)
+// e dispara alertas no formato JSON que o bot AntiHero espera.
+//
+// COMO USAR:
+//   1. Adicione este indicador ao gráfico ETHUSDT (1H recomendado)
+//   2. Clique em "Alertas" → "Criar Alerta"
+//   3. Condição: selecione "AntiHero Webhook Connector" → "Any alert() function call"
+//   4. Marque o checkbox "URL de Webhook" e cole a URL do bot
+//   5. Deixe a Mensagem em branco (o script já envia o JSON correto)
+//   6. Clique em "Criar"
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+//@version=6
+indicator("AntiHero Webhook Connector", overlay=true)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INPUTS — Parâmetros ajustáveis
+// ══════════════════════════════════════════════════════════════════════════════
+
+// MACD Settings
+macd_fast   = input.int(12,  "MACD Fast Length",   group="MACD Settings")
+macd_slow   = input.int(26,  "MACD Slow Length",   group="MACD Settings")
+macd_signal = input.int(9,   "MACD Signal Length", group="MACD Settings")
+
+// VMC / Momentum Settings (VuManChu Cipher B inspired)
+vmc_length  = input.int(14,  "VMC Wave Length",    group="VMC Settings")
+vmc_channel = input.int(21,  "VMC Channel Length", group="VMC Settings")
+
+// Strategy Config
+strategy_id = input.string("PEDRO_MVP_V1", "Strategy ID", group="Bot Config")
+
+// Trend Filter (1D EMA)
+use_trend_filter = input.bool(true, "Enable 1D Trend Filter", group="Trend Filter")
+trend_ema_len    = input.int(200,   "Trend EMA Length",        group="Trend Filter")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MACD CALCULATION — Indicador Principal de Entrada
+// ══════════════════════════════════════════════════════════════════════════════
+
+[macdLine, signalLine, histLine] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+
+// Entry signals: MACD line crosses the signal line
+macd_cross_up   = ta.crossover(macdLine, signalLine)   // Bullish → LONG
+macd_cross_down = ta.crossunder(macdLine, signalLine)  // Bearish → SHORT
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VMC / MOMENTUM — Indicador de Saída Parcial
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Simplified VuManChu-inspired momentum wave
+vmc_wave = ta.ema(close - ta.ema(close, vmc_channel), vmc_length)
+vmc_prev = vmc_wave[1]
+
+// Momentum divergence detection for partial exits
+// When momentum weakens against the position direction
+vmc_bull_weakening = vmc_wave > 0 and vmc_wave < vmc_prev and vmc_prev > vmc_wave[2]  // Peak formed in bullish
+vmc_bear_weakening = vmc_wave < 0 and vmc_wave > vmc_prev and vmc_prev < vmc_wave[2]  // Trough formed in bearish
+
+// Count consecutive weakening signals for 25% vs 50%
+var int bull_weak_count = 0
+var int bear_weak_count = 0
+
+if macd_cross_up
+    bull_weak_count := 0
+    bear_weak_count := 0
+if macd_cross_down
+    bull_weak_count := 0
+    bear_weak_count := 0
+
+if vmc_bull_weakening
+    bull_weak_count += 1
+if vmc_bear_weakening
+    bear_weak_count += 1
+
+// First weakening = 25% partial, Second = 50% partial
+vmc_partial_25_long  = vmc_bull_weakening and bull_weak_count == 1
+vmc_partial_50_long  = vmc_bull_weakening and bull_weak_count == 2
+vmc_partial_25_short = vmc_bear_weakening and bear_weak_count == 1
+vmc_partial_50_short = vmc_bear_weakening and bear_weak_count == 2
+
+// ══════════════════════════════════════════════════════════════════════════════
+// 1D TREND FILTER — Filtro direcional
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Request 1D EMA for trend direction
+ema_1d = request.security(syminfo.tickerid, "D", ta.ema(close, trend_ema_len))
+trend_up   = close > ema_1d
+trend_down = close < ema_1d
+trend_str  = trend_up ? "UP" : trend_down ? "DOWN" : "NONE"
+
+// Apply filter if enabled
+entry_long_ok  = macd_cross_up   and (not use_trend_filter or trend_up)
+entry_short_ok = macd_cross_down and (not use_trend_filter or trend_down)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VISUAL MARKERS — Sinais no Gráfico
+// ══════════════════════════════════════════════════════════════════════════════
+
+plotshape(entry_long_ok,  "LONG Entry",  shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.normal)
+plotshape(entry_short_ok, "SHORT Entry", shape.triangledown, location.abovebar, color.new(color.red, 0),   size=size.normal)
+
+plotshape(vmc_partial_25_long,  "P25 Long",  shape.diamond, location.abovebar, color.new(color.orange, 0), size=size.tiny)
+plotshape(vmc_partial_50_long,  "P50 Long",  shape.diamond, location.abovebar, color.new(color.yellow, 0), size=size.tiny)
+plotshape(vmc_partial_25_short, "P25 Short", shape.diamond, location.belowbar, color.new(color.orange, 0), size=size.tiny)
+plotshape(vmc_partial_50_short, "P50 Short", shape.diamond, location.belowbar, color.new(color.yellow, 0), size=size.tiny)
+
+// Background color for trend
+bgcolor(use_trend_filter ? (trend_up ? color.new(color.green, 95) : color.new(color.red, 95)) : na)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WEBHOOK ALERTS — JSON payloads para o Bot AntiHero
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Helper: build the JSON payload
+tf_str = timeframe.period
+
+// ENTRY ALERTS
+if entry_long_ok and barstate.isconfirmed
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+
+if entry_short_ok and barstate.isconfirmed
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+
+// PARTIAL EXIT ALERTS
+if vmc_partial_25_long and barstate.isconfirmed
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+
+if vmc_partial_50_long and barstate.isconfirmed
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+
+if vmc_partial_25_short and barstate.isconfirmed
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+
+if vmc_partial_50_short and barstate.isconfirmed
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
