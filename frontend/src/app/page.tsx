@@ -197,8 +197,8 @@ export default function Dashboard() {
                   <div className="stat-value position-symbol">{position.symbol}</div>
                   <span className="stat-label">Perpetual Contract</span>
                 </div>
-                <div className={`badge ${position.side === 'Buy' ? 'long' : 'short'}`}>
-                  {position.side === 'Buy' ? 'LONG' : 'SHORT'}
+                <div className={`badge ${position.side === 'BUY' ? 'long' : 'short'}`}>
+                  {position.side === 'BUY' ? 'LONG' : 'SHORT'}
                 </div>
               </div>
 
