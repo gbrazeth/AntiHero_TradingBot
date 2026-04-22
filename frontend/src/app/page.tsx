@@ -5,7 +5,7 @@ import { Activity, Wallet, RefreshCw, BarChart2, ShieldAlert } from 'lucide-reac
 
 interface PositionData {
   symbol: string;
-  side: 'Buy' | 'Sell' | 'None';
+  side: 'BUY' | 'SELL' | 'None';
   size: string;
   avgPrice: string;
   unrealisedPnl: string;
