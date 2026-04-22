@@ -46,9 +46,11 @@ export default function Dashboard() {
     try {
       setRefreshing(true);
       
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+
       // Fetch Position
       try {
-        const posRes = await fetch('http://localhost:3333/status/position');
+        const posRes = await fetch(`${API_URL}/status/position`);
         if (!posRes.ok) {
           const detail = await posRes.json().catch(() => ({}));
           throw new Error(detail.message || 'Failed to fetch position');
@@ -62,7 +64,7 @@ export default function Dashboard() {
 
       // Fetch Balance
       try {
-        const balRes = await fetch('http://localhost:3333/status/balance');
+        const balRes = await fetch(`${API_URL}/status/balance`);
         if (!balRes.ok) {
            throw new Error('Failed to fetch balance');
         }
@@ -74,7 +76,7 @@ export default function Dashboard() {
       
       // Fetch History
       try {
-        const histRes = await fetch('http://localhost:3333/status/history');
+        const histRes = await fetch(`${API_URL}/status/history`);
         if (histRes.ok) {
           const histData = await histRes.json();
           setHistory(histData.history || []);
