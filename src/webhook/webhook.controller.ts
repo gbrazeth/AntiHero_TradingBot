@@ -11,13 +11,14 @@ export async function webhookController(app: FastifyInstance): Promise<void> {
 
     app.post('/webhook/tradingview', async (request, reply) => {
         // ── 1. Authentication ───────────────────────────
-        const token = request.headers['x-webhook-token'];
+        const query = request.query as { token?: string };
+        const token = query.token || request.headers['x-webhook-token'];
 
         if (!token || token !== env.WEBHOOK_TOKEN) {
             app.log.warn({ ip: request.ip }, 'Unauthorized webhook request');
             return reply.status(401).send({
                 error: 'Unauthorized',
-                message: 'Invalid or missing X-WEBHOOK-TOKEN',
+                message: 'Invalid or missing Token',
             });
         }
 
