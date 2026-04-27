@@ -23,11 +23,22 @@ export async function webhookController(app: FastifyInstance): Promise<void> {
         }
 
         // ── 2. Payload Validation ───────────────────────
-        const parsed = webhookPayloadSchema.safeParse(request.body);
+        let payload = request.body;
+        if (typeof payload === 'string') {
+            try {
+                payload = JSON.parse(payload);
+            } catch (err) {
+                app.log.warn({ rawBody: request.body }, 'Failed to parse webhook JSON');
+            }
+        }
+        
+        app.log.info({ payload }, 'Incoming Webhook Payload Details');
+
+        const parsed = webhookPayloadSchema.safeParse(payload);
 
         if (!parsed.success) {
             const errors = parsed.error.flatten().fieldErrors;
-            app.log.warn({ errors }, 'Webhook payload validation failed');
+            app.log.warn({ errors, rawPayload: payload }, 'Webhook payload validation failed');
             return reply.status(400).send({
                 error: 'Validation Error',
                 details: errors,

@@ -15,6 +15,20 @@ const app = Fastify({
     },
 });
 
+app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
+    try {
+        if (body) {
+            const json = JSON.parse(body as string);
+            done(null, json);
+        } else {
+            done(null, {});
+        }
+    } catch (err) {
+        // If not valid JSON, just pass the raw string to the controller
+        done(null, body);
+    }
+});
+
 await app.register(cors, {
     origin: '*', // Allow Next.js during dev MVP
 });
