@@ -15,7 +15,7 @@ const app = Fastify({
     },
 });
 
-app.addContentTypeParser('*', { parseAs: 'string' }, (req, body, done) => {
+app.addContentTypeParser('*', { parseAs: 'string' }, (_req, body, done) => {
     try {
         if (body) {
             const json = JSON.parse(body as string);
