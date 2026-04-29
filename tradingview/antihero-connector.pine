@@ -121,20 +121,20 @@ tf_str = timeframe.period
 
 // ENTRY ALERTS
 if entry_long_ok and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
 
 if entry_short_ok and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
 
 // PARTIAL EXIT ALERTS
 if vmc_partial_25_long and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
 
 if vmc_partial_50_long and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
 
 if vmc_partial_25_short and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
 
 if vmc_partial_50_short and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + 'USDT","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
