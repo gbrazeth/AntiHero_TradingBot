@@ -9,7 +9,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
     const exchange = new BinanceAdapter(app.log);
 
     // ── TEMPORARY RESET ENDPOINT ──────────────────────────────────────
-    app.get('/status/reset', async (request, reply) => {
+    app.get('/status/reset', async (_request, reply) => {
         try {
             await prisma.position.updateMany({
                 where: { status: 'open' },
