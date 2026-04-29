@@ -8,6 +8,8 @@ interface PositionData {
   side: 'BUY' | 'SELL' | 'None';
   size: string;
   avgPrice: string;
+  markPrice: string;
+  leverage: string;
   unrealisedPnl: string;
   stopLoss: string;
 }
@@ -103,6 +105,19 @@ export default function Dashboard() {
   }, [fetchData]);
 
   const usdtBalance = balance.find(b => b.coin === 'USDT');
+
+  const calculateROE = (pos: PositionData) => {
+    const size = parseFloat(pos.size);
+    const entry = parseFloat(pos.avgPrice);
+    const lev = parseFloat(pos.leverage || '20');
+    const pnl = parseFloat(pos.unrealisedPnl);
+    
+    if (size === 0 || entry === 0 || lev === 0) return '0.00';
+    
+    const margin = (size * entry) / lev;
+    const roe = (pnl / margin) * 100;
+    return roe.toFixed(2);
+  };
 
   return (
     <div className="dashboard-container">
@@ -210,19 +225,24 @@ export default function Dashboard() {
               </div>
               
               <div className="info-row">
+                <span className="info-label">Mark Price</span>
+                <span className="info-value">${parseFloat(position.markPrice).toFixed(2)}</span>
+              </div>
+
+              <div className="info-row">
                 <span className="info-label">Size</span>
-                <span className="info-value">{position.size} {position.symbol.replace('USDT', '')}</span>
+                <span className="info-value">{position.size} {position.symbol.replace('USDT', '')} ({position.leverage}x)</span>
               </div>
 
               <div className="info-row">
                 <span className="info-label">Stop Loss</span>
-                <span className="info-value">{position.stopLoss ? `$${parseFloat(position.stopLoss).toFixed(2)}` : 'N/A'}</span>
+                <span className="info-value">{position.stopLoss !== 'N/A' ? `$${parseFloat(position.stopLoss).toFixed(2)}` : 'N/A'}</span>
               </div>
 
               <div className="info-row position-pnl-row">
                 <span className="info-label">Unrealized PNL</span>
                 <span className={`info-value ${parseFloat(position.unrealisedPnl) >= 0 ? 'text-success' : 'text-danger'}`}>
-                  {parseFloat(position.unrealisedPnl) > 0 ? '+' : ''}{position.unrealisedPnl}
+                  {parseFloat(position.unrealisedPnl) > 0 ? '+' : ''}{parseFloat(position.unrealisedPnl).toFixed(2)} USDT ({calculateROE(position)}%)
                 </span>
               </div>
             </>

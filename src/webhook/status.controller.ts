@@ -47,6 +47,11 @@ export async function statusController(app: FastifyInstance): Promise<void> {
                 });
             }
 
+            // Fetch local position to get the Stop Loss (which Binance v2/positionRisk hides)
+            const dbPos = await prisma.position.findFirst({
+                where: { symbol: 'ETHUSDT', status: 'open' },
+            });
+
             return reply.status(200).send({
                 status: 'ok',
                 position: {
@@ -54,8 +59,10 @@ export async function statusController(app: FastifyInstance): Promise<void> {
                     side: position.side,
                     size: position.size,
                     avgPrice: position.avgPrice,
+                    markPrice: position.markPrice,
+                    leverage: position.leverage,
                     unrealisedPnl: position.unrealisedPnl,
-                    stopLoss: position.stopLoss,
+                    stopLoss: dbPos?.slPrice ? String(dbPos.slPrice) : 'N/A',
                 },
             });
         } catch (err) {

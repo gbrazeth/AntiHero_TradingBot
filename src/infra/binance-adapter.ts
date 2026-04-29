@@ -12,6 +12,8 @@ export interface BinancePosition {
     entryPrice: string;
     unRealizedProfit: string;
     positionSide: 'BOTH' | 'LONG' | 'SHORT';
+    markPrice: string;
+    leverage: string;
 }
 
 interface BinanceBalance {
@@ -75,6 +77,8 @@ export class BinanceAdapter {
         avgPrice: string;
         unrealisedPnl: string;
         stopLoss: string;
+        markPrice: string;
+        leverage: string;
     } | null> {
         if (env.MOCK_EXCHANGE) {
             this.logger.info({ symbol, mode: 'MOCK' }, 'MOCK: Fetching position from local DB');
@@ -87,8 +91,10 @@ export class BinanceAdapter {
                 side: pos.side.toUpperCase() as 'BUY' | 'SELL',
                 size: String(pos.currentQty),
                 avgPrice: String(pos.entryPrice),
-                unrealisedPnl: '0.00 (MOCK - Real PNL from Binance)',
+                unrealisedPnl: '0.00',
                 stopLoss: String(pos.slPrice ?? ''),
+                markPrice: String(pos.entryPrice),
+                leverage: '20',
             };
         }
 
@@ -109,6 +115,8 @@ export class BinanceAdapter {
             avgPrice: pos.entryPrice,
             unrealisedPnl: pos.unRealizedProfit,
             stopLoss: '', // Binance doesn't return stop loss on the positionRisk endpoint directly
+            markPrice: pos.markPrice,
+            leverage: pos.leverage,
         };
     }
 
