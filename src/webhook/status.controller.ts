@@ -8,6 +8,28 @@ import { prisma } from '../infra/prisma.js';
 export async function statusController(app: FastifyInstance): Promise<void> {
     const exchange = new BinanceAdapter(app.log);
 
+    // ── TEMPORARY RESET ENDPOINT ──────────────────────────────────────
+    app.get('/status/reset', async (request, reply) => {
+        try {
+            await prisma.position.updateMany({
+                where: { status: 'open' },
+                data: { status: 'closed', currentQty: 0 }
+            });
+            return reply.send(`
+                <html>
+                    <body style="background: #111; color: #0f0; font-family: monospace; padding: 50px; text-align: center;">
+                        <h1>✅ TODAS AS POSICOES FORAM FECHADAS NO BANCO DE DADOS!</h1>
+                        <p>Seu robo esta limpo e pronto para novos sinais.</p>
+                        <a href="/" style="color: #fff;">Voltar</a>
+                    </body>
+                </html>
+            `);
+        } catch (error) {
+            app.log.error(error);
+            return reply.status(500).send({ error: 'Failed to reset positions' });
+        }
+    });
+
     /**
      * GET /status/position
      * Fetches the current ETHUSDT position from Binance Testnet.
