@@ -134,6 +134,27 @@ export default function Dashboard() {
           </div>
           
           <button 
+            className="refresh-button text-danger"
+            onClick={async () => {
+              if (window.confirm('Tem certeza que deseja forçar o reset das posições abertas no banco de dados? Use apenas para limpar bugs da Testnet.')) {
+                setRefreshing(true);
+                try {
+                  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3333';
+                  await fetch(`${API_URL}/status/reset`);
+                  await fetchData();
+                } catch (err) {
+                  console.error(err);
+                } finally {
+                  setRefreshing(false);
+                }
+              }
+            }}
+            title="Reset DB (Panic Button)"
+          >
+            <ShieldAlert size={20} />
+          </button>
+          
+          <button 
             className={`refresh-button ${refreshing ? 'spinning' : ''}`}
             onClick={fetchData}
             title="Refresh Data"
