@@ -17,6 +17,8 @@ export interface RiskResult {
     slPrice: number;
     tp1Price: number;
     tp2Price: number;
+    tp3Price: number;
+    tp4Price: number;
 }
 
 export interface BreakEvenResult {
@@ -50,7 +52,7 @@ export class RiskManager {
 
         if (dailyPnl?.isKillSwitchActive) {
             this.logger.warn({ date: today }, 'Kill switch active — entry blocked');
-            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tp1Price: 0, tp2Price: 0 };
+            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tp1Price: 0, tp2Price: 0, tp3Price: 0, tp4Price: 0 };
         }
 
         if (dailyPnl) {
@@ -70,6 +72,8 @@ export class RiskManager {
                     slPrice: 0,
                     tp1Price: 0,
                     tp2Price: 0,
+                    tp3Price: 0,
+                    tp4Price: 0,
                 };
             }
         }
@@ -79,17 +83,19 @@ export class RiskManager {
         // 3. Calculate qty (fixed_usdt mode)
         const qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
 
-        // 4. Calculate SL price & TP prices
+        // 4. Calculate SL price & TP prices (ROI targets at 20x leverage: 1.25%, 2.5%, 3.75%, 5%)
         const slPrice = this.calcSl(params.side, params.entryPrice);
-        const tp1Price = this.calcTp(params.side, params.entryPrice, env.TP1_PCT);
-        const tp2Price = this.calcTp(params.side, params.entryPrice, env.TP2_PCT);
+        const tp1Price = this.calcTp(params.side, params.entryPrice, 0.0125); // 25% ROI
+        const tp2Price = this.calcTp(params.side, params.entryPrice, 0.0250); // 50% ROI
+        const tp3Price = this.calcTp(params.side, params.entryPrice, 0.0375); // 75% ROI
+        const tp4Price = this.calcTp(params.side, params.entryPrice, 0.0500); // 100% ROI
 
         this.logger.info(
-            { symbol: params.symbol, side: params.side, qty, slPrice, tp1Price, tp2Price },
+            { symbol: params.symbol, side: params.side, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price },
             'Risk check passed — entry allowed',
         );
 
-        return { allowed: true, qty, slPrice, tp1Price, tp2Price };
+        return { allowed: true, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price };
     }
 
     /**

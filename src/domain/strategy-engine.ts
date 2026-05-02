@@ -200,26 +200,21 @@ export class StrategyEngine {
             this.logger.warn({ err }, 'Failed to set initial stop loss');
         }
 
-        // 8. Set Take Profits natively
+        // 8. Set Take Profits natively (10% of total position each)
         try {
-            const tp1Qty = parseFloat((risk.qty * 0.5).toFixed(3));
-            const tp2Qty = parseFloat((risk.qty - tp1Qty).toFixed(3));
+            const tpQty = parseFloat((risk.qty * 0.10).toFixed(3));
 
-            if (tp1Qty > 0) {
-                await this.exchange.setTakeProfit({
-                    symbol: payload.symbol,
-                    side: exchangeSide,
-                    tpPrice: String(risk.tp1Price),
-                    qty: String(tp1Qty),
-                });
-            }
-            if (tp2Qty > 0) {
-                await this.exchange.setTakeProfit({
-                    symbol: payload.symbol,
-                    side: exchangeSide,
-                    tpPrice: String(risk.tp2Price),
-                    qty: String(tp2Qty),
-                });
+            if (tpQty > 0) {
+                const tps = [risk.tp1Price, risk.tp2Price, risk.tp3Price, risk.tp4Price];
+                
+                for (let i = 0; i < tps.length; i++) {
+                    await this.exchange.setTakeProfit({
+                        symbol: payload.symbol,
+                        side: exchangeSide,
+                        tpPrice: String(tps[i]),
+                        qty: String(tpQty),
+                    });
+                }
             }
         } catch (err) {
             this.logger.warn({ err }, 'Failed to set take profit limit orders');
