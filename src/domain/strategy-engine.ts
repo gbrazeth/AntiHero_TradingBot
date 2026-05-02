@@ -56,19 +56,15 @@ export class StrategyEngine {
                     break;
 
                 case 'VMC_PARTIAL_25_LONG':
-                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.25 });
-                    break;
-
                 case 'VMC_PARTIAL_50_LONG':
-                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.50 });
+                    // Green Circles (LONG momentum) exit pieces of a SHORT position
+                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.10 });
                     break;
 
                 case 'VMC_PARTIAL_25_SHORT':
-                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.25 });
-                    break;
-
                 case 'VMC_PARTIAL_50_SHORT':
-                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.50 });
+                    // Red Circles (SHORT momentum) exit pieces of a LONG position
+                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.10 });
                     break;
 
                 default:
