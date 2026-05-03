@@ -212,7 +212,7 @@ export class BinanceAdapter {
         };
     }
 
-    private async post<T>(path: string, qs: string): Promise<T> {
+    private async post<T>(path: string, qs: string, attempt = 1): Promise<T> {
         const timestamp = Date.now().toString();
         const baseQs = qs ? `${qs}&` : '';
         const qsWithRecv = `${baseQs}recvWindow=${this.recvWindow}&timestamp=${timestamp}`;
@@ -221,17 +221,26 @@ export class BinanceAdapter {
         const finalQs = `${qsWithRecv}&signature=${signature}`;
         const url = `${this.baseUrl}${path}?${finalQs}`;
         
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: this.buildHeaders(),
-        });
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: this.buildHeaders(),
+            });
 
-        const data = await response.json() as Record<string, unknown>;
-        this.assertSuccess(data, path);
-        return data as unknown as T;
+            const data = await response.json() as Record<string, unknown>;
+            this.assertSuccess(data, path);
+            return data as unknown as T;
+        } catch (err) {
+            if (this.shouldRetry(err, attempt)) {
+                this.logger.warn({ err, attempt, path }, 'Binance API error, retrying...');
+                await this.delay(500 * attempt);
+                return this.post<T>(path, qs, attempt + 1);
+            }
+            throw err;
+        }
     }
 
-    private async get<T>(pathWithQs: string): Promise<T> {
+    private async get<T>(pathWithQs: string, attempt = 1): Promise<T> {
         const timestamp = Date.now().toString();
         
         const parts = pathWithQs.split('?');
@@ -244,14 +253,23 @@ export class BinanceAdapter {
         const finalQs = `${qsWithRecv}&signature=${signature}`;
         const url = `${this.baseUrl}${path}?${finalQs}`;
 
-        const response = await fetch(url, {
-            method: 'GET',
-            headers: this.buildHeaders(),
-        });
+        try {
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: this.buildHeaders(),
+            });
 
-        const data = await response.json() as Record<string, unknown>;
-        this.assertSuccess(data, path);
-        return data as unknown as T;
+            const data = await response.json() as Record<string, unknown>;
+            this.assertSuccess(data, path);
+            return data as unknown as T;
+        } catch (err) {
+            if (this.shouldRetry(err, attempt)) {
+                this.logger.warn({ err, attempt, path }, 'Binance API error, retrying...');
+                await this.delay(500 * attempt);
+                return this.get<T>(pathWithQs, attempt + 1);
+            }
+            throw err;
+        }
     }
 
     private assertSuccess(data: Record<string, unknown>, path: string): void {
@@ -260,5 +278,22 @@ export class BinanceAdapter {
                 `Binance API error on ${path}: [${data.code}] ${data.msg}`,
             );
         }
+    }
+
+    private shouldRetry(err: unknown, attempt: number): boolean {
+        const maxRetries = 3;
+        if (attempt >= maxRetries) return false;
+        
+        const msg = err instanceof Error ? err.message : String(err);
+        
+        // Retry on network failures or specific Binance error codes (-1007 timeout, -1003 too many requests)
+        if (msg.includes('fetch') || msg.includes('network') || msg.includes('ECONNRESET')) return true;
+        if (msg.includes('[-1007]') || msg.includes('[-1003]')) return true;
+        
+        return false;
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 }
