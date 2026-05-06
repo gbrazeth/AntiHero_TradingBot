@@ -96,20 +96,8 @@ export class StrategyEngine {
     }): Promise<void> {
         const { payload, signalId, side } = params;
 
-        // 1. Trend Filter Check
-        if (payload.trend_1d && payload.trend_1d !== 'NONE') {
-            const isCounterTrend = 
-                (side === 'LONG' && payload.trend_1d === 'DOWN') ||
-                (side === 'SHORT' && payload.trend_1d === 'UP');
-                
-            if (isCounterTrend) {
-                this.logger.warn(
-                    { side, trend: payload.trend_1d },
-                    'Entry blocked by 1D Trend Filter (counter-trend)'
-                );
-                return;
-            }
-        }
+        // 1. Trend Filter Check (Removed per client request for Opção 2)
+        // Client wants to take short-term 15m signals even if against 1D trend.
 
         const exchangeSide: 'BUY' | 'SELL' = side === 'LONG' ? 'BUY' : 'SELL';
 
