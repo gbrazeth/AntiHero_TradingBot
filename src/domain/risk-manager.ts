@@ -19,6 +19,7 @@ export interface RiskResult {
     tp2Price: number;
     tp3Price: number;
     tp4Price: number;
+    tp5Price: number;
 }
 
 export interface BreakEvenResult {
@@ -52,7 +53,7 @@ export class RiskManager {
 
         if (dailyPnl?.isKillSwitchActive) {
             this.logger.warn({ date: today }, 'Kill switch active — entry blocked');
-            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tp1Price: 0, tp2Price: 0, tp3Price: 0, tp4Price: 0 };
+            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tp1Price: 0, tp2Price: 0, tp3Price: 0, tp4Price: 0, tp5Price: 0 };
         }
 
         if (dailyPnl) {
@@ -74,6 +75,7 @@ export class RiskManager {
                     tp2Price: 0,
                     tp3Price: 0,
                     tp4Price: 0,
+                    tp5Price: 0,
                 };
             }
         }
@@ -83,19 +85,20 @@ export class RiskManager {
         // 3. Calculate qty (fixed_usdt mode)
         const qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
 
-        // 4. Calculate SL price & TP prices (ROI targets at 20x leverage: 1.25%, 2.5%, 3.75%, 5%)
+        // 4. Calculate SL price & TP prices (ROI targets at 20x leverage: 1%, 2%, 3%, 4%, 5%)
         const slPrice = this.calcSl(params.side, params.entryPrice);
-        const tp1Price = this.calcTp(params.side, params.entryPrice, 0.0125); // 25% ROI
-        const tp2Price = this.calcTp(params.side, params.entryPrice, 0.0250); // 50% ROI
-        const tp3Price = this.calcTp(params.side, params.entryPrice, 0.0375); // 75% ROI
-        const tp4Price = this.calcTp(params.side, params.entryPrice, 0.0500); // 100% ROI
+        const tp1Price = this.calcTp(params.side, params.entryPrice, 0.0100); // 20% ROI
+        const tp2Price = this.calcTp(params.side, params.entryPrice, 0.0200); // 40% ROI
+        const tp3Price = this.calcTp(params.side, params.entryPrice, 0.0300); // 60% ROI
+        const tp4Price = this.calcTp(params.side, params.entryPrice, 0.0400); // 80% ROI
+        const tp5Price = this.calcTp(params.side, params.entryPrice, 0.0500); // 100% ROI
 
         this.logger.info(
-            { symbol: params.symbol, side: params.side, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price },
+            { symbol: params.symbol, side: params.side, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price, tp5Price },
             'Risk check passed — entry allowed',
         );
 
-        return { allowed: true, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price };
+        return { allowed: true, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price, tp5Price };
     }
 
     /**

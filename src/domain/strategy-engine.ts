@@ -58,13 +58,23 @@ export class StrategyEngine {
                 case 'VMC_PARTIAL_25_LONG':
                 case 'VMC_PARTIAL_50_LONG':
                     // Green Circles (LONG momentum) exit pieces of a SHORT position
-                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.10 });
+                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.33 });
                     break;
 
                 case 'VMC_PARTIAL_25_SHORT':
                 case 'VMC_PARTIAL_50_SHORT':
                     // Red Circles (SHORT momentum) exit pieces of a LONG position
-                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.10 });
+                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.33 });
+                    break;
+
+                case 'TARGET_PRICE_LONG':
+                    // Target Price hit for LONG position
+                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.33 });
+                    break;
+
+                case 'TARGET_PRICE_SHORT':
+                    // Target Price hit for SHORT position
+                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.33 });
                     break;
 
                 default:
@@ -201,7 +211,7 @@ export class StrategyEngine {
             const tpQty = parseFloat((risk.qty * 0.10).toFixed(3));
 
             if (tpQty > 0) {
-                const tps = [risk.tp1Price, risk.tp2Price, risk.tp3Price, risk.tp4Price];
+                const tps = [risk.tp1Price, risk.tp2Price, risk.tp3Price, risk.tp4Price, risk.tp5Price];
                 
                 for (let i = 0; i < tps.length; i++) {
                     await this.exchange.setTakeProfit({

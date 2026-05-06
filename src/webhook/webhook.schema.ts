@@ -10,6 +10,8 @@ export const VALID_EVENTS = [
     'VMC_PARTIAL_50_LONG',
     'VMC_PARTIAL_25_SHORT',
     'VMC_PARTIAL_50_SHORT',
+    'TARGET_PRICE_LONG',
+    'TARGET_PRICE_SHORT',
 ] as const;
 
 export type WebhookEvent = (typeof VALID_EVENTS)[number];
