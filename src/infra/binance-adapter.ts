@@ -172,11 +172,11 @@ export class BinanceAdapter {
         const qsParams = new URLSearchParams({
             symbol: params.symbol,
             side: tpSide,
-            type: 'TAKE_PROFIT_MARKET',
-            stopPrice: params.tpPrice,
+            type: 'LIMIT',
+            timeInForce: 'GTC',
+            price: params.tpPrice,
             reduceOnly: 'true',
             quantity: params.qty,
-            workingType: 'MARK_PRICE',
         });
 
         await this.post('/fapi/v1/order', qsParams.toString());
