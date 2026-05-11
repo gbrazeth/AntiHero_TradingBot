@@ -44,6 +44,7 @@ export class StrategyEngine {
         this.logger.info({ event: payload.event, signalId }, 'StrategyEngine processing signal');
 
         await this.risk.ensureDailyPnlRow();
+        await this.syncPositionState(payload.symbol);
 
         try {
             switch (payload.event as WebhookEvent) {
@@ -84,6 +85,45 @@ export class StrategyEngine {
             this.logger.error({ err, event: payload.event }, 'StrategyEngine error');
             await this.telegram.notifyError(`StrategyEngine.${payload.event}`, err);
             throw err;
+        }
+    }
+
+    // ── Position State Sync ──────────────────────────────────────────────
+
+    /**
+     * Synchronizes the local DB position state with Binance.
+     * Crucial to avoid "[-2022] ReduceOnly Order is rejected" when TP/SL hit on Binance
+     * but the local SQLite DB still thinks the position is open.
+     */
+    private async syncPositionState(symbol: string): Promise<void> {
+        try {
+            const realPos = await this.exchange.getPosition(symbol);
+            
+            const dbPos = await prisma.position.findFirst({
+                where: { symbol, status: 'open' },
+            });
+
+            if (dbPos && !realPos) {
+                this.logger.info({ symbol, posId: dbPos.id }, 'Sync: Position closed on Binance (likely SL/TP). Updating DB.');
+                await prisma.position.update({
+                    where: { id: dbPos.id },
+                    data: { status: 'closed', currentQty: 0 },
+                });
+            } else if (dbPos && realPos) {
+                const realQty = parseFloat(realPos.size);
+                if (realQty > 0 && Math.abs(realQty - dbPos.currentQty) > 0.001) {
+                    this.logger.info(
+                        { symbol, posId: dbPos.id, dbQty: dbPos.currentQty, realQty }, 
+                        'Sync: Position size mismatch (likely partial TP hit). Updating DB.'
+                    );
+                    await prisma.position.update({
+                        where: { id: dbPos.id },
+                        data: { currentQty: realQty },
+                    });
+                }
+            }
+        } catch (err) {
+            this.logger.warn({ err, symbol }, 'Failed to sync position state from Binance');
         }
     }
 
