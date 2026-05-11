@@ -38,6 +38,23 @@ export class StrategyEngine {
     }
 
     /**
+     * Starts the polling mechanism to detect native Take Profit/Stop Loss executions
+     * on Binance and update the local DB (e.g. applying break-even).
+     */
+    public startPolling(): void {
+        setInterval(() => {
+            this.pollPositions().catch(err => this.logger.error({ err }, 'Polling error'));
+        }, 15000);
+    }
+
+    private async pollPositions(): Promise<void> {
+        const openPositions = await prisma.position.findMany({ where: { status: 'open' } });
+        for (const pos of openPositions) {
+            await this.syncPositionState(pos.symbol);
+        }
+    }
+
+    /**
      * Main entry point. Routes the signal to the correct handler.
      */
     async handleSignal(payload: WebhookPayload, signalId: number): Promise<void> {
@@ -111,11 +128,50 @@ export class StrategyEngine {
                 });
             } else if (dbPos && realPos) {
                 const realQty = parseFloat(realPos.size);
-                if (realQty > 0 && Math.abs(realQty - dbPos.currentQty) > 0.001) {
+                if (realQty > 0 && realQty < dbPos.currentQty - 0.001) {
                     this.logger.info(
                         { symbol, posId: dbPos.id, dbQty: dbPos.currentQty, realQty }, 
-                        'Sync: Position size mismatch (likely partial TP hit). Updating DB.'
+                        'Sync: Native Partial TP hit detected. Updating DB.'
                     );
+                    
+                    const isFirstPartial = !dbPos.beApplied;
+                    let newSlPrice = dbPos.slPrice;
+
+                    if (isFirstPartial) {
+                        newSlPrice = this.risk.calcBreakEven(dbPos.side as 'LONG'|'SHORT', dbPos.entryPrice);
+                        const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
+                        
+                        try {
+                            await this.exchange.setTradingStop({
+                                symbol: dbPos.symbol,
+                                side: entrySide,
+                                stopLoss: String(newSlPrice),
+                                qty: String(realQty),
+                            });
+                            await this.telegram.notifyBreakEven({
+                                symbol: dbPos.symbol,
+                                newSl: newSlPrice,
+                            });
+                        } catch (err) {
+                            this.logger.warn({ err }, 'Failed to set break-even after native partial');
+                        }
+                    }
+
+                    await prisma.position.update({
+                        where: { id: dbPos.id },
+                        data: { currentQty: realQty, slPrice: newSlPrice, beApplied: isFirstPartial ? true : dbPos.beApplied },
+                    });
+
+                    const pctClosed = ((dbPos.currentQty - realQty) / dbPos.currentQty) * 100;
+                    await this.telegram.notifyPartialExit({
+                        symbol: dbPos.symbol,
+                        pct: parseFloat(pctClosed.toFixed(2)),
+                        price: dbPos.entryPrice, // approx fill price
+                        closedQty: String((dbPos.currentQty - realQty).toFixed(3)),
+                        event: 'NATIVE_PARTIAL_HIT'
+                    });
+                } else if (realQty > dbPos.currentQty + 0.001) {
+                    // Position increased (manual trade?), just update DB
                     await prisma.position.update({
                         where: { id: dbPos.id },
                         data: { currentQty: realQty },
@@ -236,18 +292,29 @@ export class StrategyEngine {
 
         // 8. Set Take Profits natively (10% of total position each)
         try {
-            const tpQty = parseFloat((risk.qty * 0.10).toFixed(3));
+            let tpQty = parseFloat((risk.qty * 0.10).toFixed(3));
+            
+            // Binance MIN_NOTIONAL is 5 USDT. We force at least 6 USDT worth to be safe.
+            const minQty = parseFloat((6.0 / payload.price).toFixed(3));
+            if (tpQty < minQty) {
+                tpQty = minQty;
+            }
 
-            if (tpQty > 0) {
+            if (tpQty > 0 && tpQty <= risk.qty) {
                 const tps = [risk.tp1Price, risk.tp2Price, risk.tp3Price, risk.tp4Price, risk.tp5Price];
+                let remainingQty = risk.qty;
                 
                 for (let i = 0; i < tps.length; i++) {
+                    if (remainingQty < tpQty) break;
+                    
                     await this.exchange.setTakeProfit({
                         symbol: payload.symbol,
                         side: exchangeSide,
                         tpPrice: String(tps[i]),
                         qty: String(tpQty),
                     });
+                    
+                    remainingQty -= tpQty;
                 }
             }
         } catch (err) {

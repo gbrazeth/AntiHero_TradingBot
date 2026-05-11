@@ -11,6 +11,10 @@ export class WebhookService {
         this.strategy = new StrategyEngine(logger);
     }
 
+    public startPolling(): void {
+        this.strategy.startPolling();
+    }
+
     /**
      * Process an incoming webhook signal.
      *

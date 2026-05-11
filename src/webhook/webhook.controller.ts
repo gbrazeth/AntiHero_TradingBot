@@ -8,6 +8,7 @@ import { env } from '../config/env.js';
  */
 export async function webhookController(app: FastifyInstance): Promise<void> {
     const service = new WebhookService(app.log);
+    service.startPolling();
 
     app.post('/webhook/tradingview', async (request, reply) => {
         // ── 1. Authentication ───────────────────────────
