@@ -1,0 +1,84 @@
+//@version=5
+indicator("AntiHero Bot - Phase 3 (RSI + MACD)", overlay=true)
+
+// =========================================================================
+// 1. Parâmetros e Inputs
+// =========================================================================
+var string GRP_RSI = "RSI Settings"
+rsiLength = input.int(14, title="RSI Length", group=GRP_RSI)
+rsiOverbought = input.int(70, title="RSI Overbought (Venda)", group=GRP_RSI)
+rsiOversold = input.int(30, title="RSI Oversold (Compra)", group=GRP_RSI)
+
+var string GRP_MACD = "MACD Settings"
+fastLength = input.int(12, title="Fast Length", group=GRP_MACD)
+slowLength = input.int(26, title="Slow Length", group=GRP_MACD)
+signalLength = input.int(9, title="Signal Smoothing", group=GRP_MACD)
+
+var string GRP_WEBHOOK = "Webhook / JSON payload"
+strategyId = input.string("ANTIHERO_PHASE_3", title="Strategy ID", group=GRP_WEBHOOK)
+
+// =========================================================================
+// 2. Lógica do RSI (Entradas Principais e Auto-Reversão)
+// =========================================================================
+rsiValue = ta.rsi(close, rsiLength)
+
+// O Pedro pediu: entradas de compra (e saída de venda) abaixo de 30
+// E entradas de venda (e saída de compra) acima de 70.
+// Usamos crossunder/crossover para pegar o exato momento do gatilho.
+buySignal = ta.crossunder(rsiValue, rsiOversold)
+sellSignal = ta.crossover(rsiValue, rsiOverbought)
+
+// =========================================================================
+// 3. Lógica do MACD (Fatiamento / Parciais de Lucro)
+// =========================================================================
+[macdLine, signalLine, _] = ta.macd(close, fastLength, slowLength, signalLength)
+
+// Quando MACD cruza para baixo (bearish), fatiamos lucro de uma posição LONG
+macdPartialLong = ta.crossunder(macdLine, signalLine)
+
+// Quando MACD cruza para cima (bullish), fatiamos lucro de uma posição SHORT
+macdPartialShort = ta.crossover(macdLine, signalLine)
+
+// =========================================================================
+// 4. Plotagens Visuais no Gráfico
+// =========================================================================
+// Sinais de Entrada (RSI)
+plotshape(buySignal, title="RSI Buy", text="BUY", style=shape.labelup, location=location.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+plotshape(sellSignal, title="RSI Sell", text="SELL", style=shape.labeldown, location=location.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+
+// Sinais de Parcial (MACD)
+plotshape(macdPartialLong, title="MACD Partial Long", text="P-LONG", style=shape.xcross, location=location.abovebar, color=color.new(color.yellow, 0), size=size.tiny)
+plotshape(macdPartialShort, title="MACD Partial Short", text="P-SHORT", style=shape.xcross, location=location.belowbar, color=color.new(color.orange, 0), size=size.tiny)
+
+// =========================================================================
+// 5. Geração do Payload JSON (String Dinâmica)
+// =========================================================================
+// Função auxiliar para montar o JSON padronizado do bot
+f_get_json(event_name) =>
+    "{" +
+      "\"strategy_id\": \"" + strategyId + "\"," +
+      "\"exchange\": \"BINANCE_TESTNET\"," +
+      "\"symbol\": \"ETHUSDT\"," +
+      "\"timeframe\": \"" + timeframe.period + "\"," +
+      "\"price\": " + str.tostring(close) + "," +
+      "\"timestamp\": \"" + str.format("{0,date,yyyy-MM-dd'T'HH:mm:ss.SSSZ}", time) + "\"," +
+      "\"bar_close\": true," +
+      "\"event\": \"" + event_name + "\"" +
+    "}"
+
+// =========================================================================
+// 6. Alertas (Webhooks)
+// =========================================================================
+// Entradas (Auto-reversão é feita automaticamente no servidor)
+if buySignal
+    alert(f_get_json("RSI_ENTRY_LONG"), alert.freq_once_per_bar_close)
+
+if sellSignal
+    alert(f_get_json("RSI_ENTRY_SHORT"), alert.freq_once_per_bar_close)
+
+// Parciais via MACD
+if macdPartialLong
+    alert(f_get_json("MACD_PARTIAL_LONG"), alert.freq_once_per_bar_close)
+
+if macdPartialShort
+    alert(f_get_json("MACD_PARTIAL_SHORT"), alert.freq_once_per_bar_close)

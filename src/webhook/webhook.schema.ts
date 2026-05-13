@@ -6,6 +6,10 @@ import { z } from 'zod';
 export const VALID_EVENTS = [
     'MACD_ENTRY_LONG',
     'MACD_ENTRY_SHORT',
+    'RSI_ENTRY_LONG',
+    'RSI_ENTRY_SHORT',
+    'MACD_PARTIAL_LONG',
+    'MACD_PARTIAL_SHORT',
     'VMC_PARTIAL_25_LONG',
     'VMC_PARTIAL_50_LONG',
     'VMC_PARTIAL_25_SHORT',

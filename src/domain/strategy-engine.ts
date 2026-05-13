@@ -66,21 +66,25 @@ export class StrategyEngine {
         try {
             switch (payload.event as WebhookEvent) {
                 case 'MACD_ENTRY_LONG':
+                case 'RSI_ENTRY_LONG':
                     await this.handleEntry({ payload, signalId, side: 'LONG' });
                     break;
 
                 case 'MACD_ENTRY_SHORT':
+                case 'RSI_ENTRY_SHORT':
                     await this.handleEntry({ payload, signalId, side: 'SHORT' });
                     break;
 
                 case 'VMC_PARTIAL_25_LONG':
                 case 'VMC_PARTIAL_50_LONG':
+                case 'MACD_PARTIAL_LONG':
                     // Bullish momentum weakening -> exit pieces of a LONG position
                     await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.33 });
                     break;
 
                 case 'VMC_PARTIAL_25_SHORT':
                 case 'VMC_PARTIAL_50_SHORT':
+                case 'MACD_PARTIAL_SHORT':
                     // Bearish momentum weakening -> exit pieces of a SHORT position
                     await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.33 });
                     break;
