@@ -1,5 +1,5 @@
 //@version=6
-indicator("AntiHero Bot - Phase 3 (RSI + MACD)", overlay=true)
+indicator("AntiHero Bot - Phase 3 (RSI + MACD + VMC)", overlay=true)
 
 // =========================================================================
 // 1. Parâmetros e Inputs
@@ -14,6 +14,10 @@ fastLength = input.int(12, title="Fast Length", group=GRP_MACD)
 slowLength = input.int(26, title="Slow Length", group=GRP_MACD)
 signalLength = input.int(9, title="Signal Smoothing", group=GRP_MACD)
 
+var string GRP_VMC = "VMC Settings (WaveTrend)"
+n1 = input.int(10, "Channel Length", group=GRP_VMC)
+n2 = input.int(21, "Average Length", group=GRP_VMC)
+
 var string GRP_WEBHOOK = "Webhook / JSON payload"
 strategyId = input.string("ANTIHERO_PHASE_3", title="Strategy ID", group=GRP_WEBHOOK)
 
@@ -22,8 +26,8 @@ strategyId = input.string("ANTIHERO_PHASE_3", title="Strategy ID", group=GRP_WEB
 // =========================================================================
 rsiValue = ta.rsi(close, rsiLength)
 
-// O Pedro pediu: entradas de compra (e saída de venda) abaixo de 30
-// E entradas de venda (e saída de compra) acima de 70.
+// Entradas de compra (e saída de venda) abaixo de 30
+// Entradas de venda (e saída de compra) acima de 70
 buySignal = ta.crossunder(rsiValue, rsiOversold)
 sellSignal = ta.crossover(rsiValue, rsiOverbought)
 
@@ -32,38 +36,68 @@ sellSignal = ta.crossover(rsiValue, rsiOverbought)
 // =========================================================================
 [macdLine, signalLine, _] = ta.macd(close, fastLength, slowLength, signalLength)
 
-// Quando MACD cruza para baixo (bearish), fatiamos lucro de uma posição LONG
+// MACD cruza para baixo (bearish) -> fatiar LONG
 macdPartialLong = ta.crossunder(macdLine, signalLine)
 
-// Quando MACD cruza para cima (bullish), fatiamos lucro de uma posição SHORT
+// MACD cruza para cima (bullish) -> fatiar SHORT
 macdPartialShort = ta.crossover(macdLine, signalLine)
 
 // =========================================================================
-// 4. Plotagens Visuais no Gráfico
+// 4. Lógica do VMC (WaveTrend - Fatiamento / Parciais de Lucro)
+// =========================================================================
+ap = hlc3 
+esa = ta.ema(ap, n1)
+d = ta.ema(math.abs(ap - esa), n1)
+ci = (ap - esa) / (0.015 * d)
+tci = ta.ema(ci, n2)
+
+wt1 = tci
+wt2 = ta.sma(wt1, 4)
+
+// Bolinhas Verdes do VMC (Bullish) -> fatiar SHORT
+vmcPartialShort = ta.crossover(wt1, wt2)
+
+// Bolinhas Vermelhas do VMC (Bearish) -> fatiar LONG
+vmcPartialLong = ta.crossunder(wt1, wt2)
+
+// =========================================================================
+// 5. Plotagens Visuais no Gráfico
 // =========================================================================
 plotshape(buySignal, title="RSI Buy", text="BUY", style=shape.labelup, location=location.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
 plotshape(sellSignal, title="RSI Sell", text="SELL", style=shape.labeldown, location=location.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
 
-plotshape(macdPartialLong, title="MACD Partial Long", text="P-LONG", style=shape.xcross, location=location.abovebar, color=color.new(color.yellow, 0), size=size.tiny)
-plotshape(macdPartialShort, title="MACD Partial Short", text="P-SHORT", style=shape.xcross, location=location.belowbar, color=color.new(color.orange, 0), size=size.tiny)
+plotshape(macdPartialLong, title="MACD P-Long", style=shape.xcross, location=location.abovebar, color=color.new(color.yellow, 0), size=size.tiny)
+plotshape(macdPartialShort, title="MACD P-Short", style=shape.xcross, location=location.belowbar, color=color.new(color.orange, 0), size=size.tiny)
+
+plotshape(vmcPartialLong, title="VMC P-Long", style=shape.circle, location=location.abovebar, color=color.new(color.red, 0), size=size.tiny)
+plotshape(vmcPartialShort, title="VMC P-Short", style=shape.circle, location=location.belowbar, color=color.new(color.green, 0), size=size.tiny)
 
 // =========================================================================
-// 5. Geração do Payload JSON (String Dinâmica)
+// 6. Geração do Payload JSON
 // =========================================================================
 f_get_json(event_name) =>
     "{\"strategy_id\": \"" + strategyId + "\",\"exchange\": \"BINANCE_TESTNET\",\"symbol\": \"ETHUSDT\",\"timeframe\": \"" + timeframe.period + "\",\"price\": " + str.tostring(close) + ",\"timestamp\": \"" + str.format("{0,date,yyyy-MM-dd'T'HH:mm:ss.SSSZ}", time) + "\",\"bar_close\": true,\"event\": \"" + event_name + "\"}"
 
 // =========================================================================
-// 6. Alertas (Webhooks)
+// 7. Alertas (Webhooks)
 // =========================================================================
+// Entradas Principais
 if buySignal
     alert(f_get_json("RSI_ENTRY_LONG"), alert.freq_once_per_bar_close)
 
 if sellSignal
     alert(f_get_json("RSI_ENTRY_SHORT"), alert.freq_once_per_bar_close)
 
+// Fatiamento por MACD
 if macdPartialLong
     alert(f_get_json("MACD_PARTIAL_LONG"), alert.freq_once_per_bar_close)
 
 if macdPartialShort
     alert(f_get_json("MACD_PARTIAL_SHORT"), alert.freq_once_per_bar_close)
+
+// Fatiamento por VMC
+if vmcPartialLong
+    alert(f_get_json("VMC_PARTIAL_25_LONG"), alert.freq_once_per_bar_close)
+
+if vmcPartialShort
+    alert(f_get_json("VMC_PARTIAL_25_SHORT"), alert.freq_once_per_bar_close)
