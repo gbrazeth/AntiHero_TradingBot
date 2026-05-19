@@ -20,6 +20,7 @@ n2 = input.int(21, "Average Length", group=GRP_VMC)
 
 var string GRP_WEBHOOK = "Webhook / JSON payload"
 strategyId = input.string("ANTIHERO_PHASE_3", title="Strategy ID", group=GRP_WEBHOOK)
+waitForClose = input.bool(true, title="Wait for Candle Close?", tooltip="Se desmarcado, o robô compra/vende no exato segundo que a linha azul cruza o alvo, sem esperar a hora fechar.", group=GRP_WEBHOOK)
 
 // =========================================================================
 // 2. Lógica do RSI (Entradas Principais e Auto-Reversão)
@@ -76,28 +77,30 @@ plotshape(vmcPartialShort, title="VMC P-Short", style=shape.circle, location=loc
 // 6. Geração do Payload JSON
 // =========================================================================
 f_get_json(event_name) =>
-    "{\"strategy_id\": \"" + strategyId + "\",\"exchange\": \"BINANCE_TESTNET\",\"symbol\": \"ETHUSDT\",\"timeframe\": \"" + timeframe.period + "\",\"price\": " + str.tostring(close) + ",\"timestamp\": \"" + str.format("{0,date,yyyy-MM-dd'T'HH:mm:ss.SSSZ}", time) + "\",\"bar_close\": true,\"event\": \"" + event_name + "\"}"
+    "{\"strategy_id\": \"" + strategyId + "\",\"exchange\": \"BINANCE_TESTNET\",\"symbol\": \"ETHUSDT\",\"timeframe\": \"" + timeframe.period + "\",\"price\": " + str.tostring(close) + ",\"timestamp\": \"" + str.format("{0,date,yyyy-MM-dd'T'HH:mm:ss.SSSZ}", time) + "\",\"bar_close\": " + (waitForClose ? "true" : "false") + ",\"event\": \"" + event_name + "\"}"
 
 // =========================================================================
 // 7. Alertas (Webhooks)
 // =========================================================================
+freq = waitForClose ? alert.freq_once_per_bar_close : alert.freq_once_per_bar
+
 // Entradas Principais
 if buySignal
-    alert(f_get_json("RSI_ENTRY_LONG"), alert.freq_once_per_bar_close)
+    alert(f_get_json("RSI_ENTRY_LONG"), freq)
 
 if sellSignal
-    alert(f_get_json("RSI_ENTRY_SHORT"), alert.freq_once_per_bar_close)
+    alert(f_get_json("RSI_ENTRY_SHORT"), freq)
 
 // Fatiamento por MACD
 if macdPartialLong
-    alert(f_get_json("MACD_PARTIAL_LONG"), alert.freq_once_per_bar_close)
+    alert(f_get_json("MACD_PARTIAL_LONG"), freq)
 
 if macdPartialShort
-    alert(f_get_json("MACD_PARTIAL_SHORT"), alert.freq_once_per_bar_close)
+    alert(f_get_json("MACD_PARTIAL_SHORT"), freq)
 
 // Fatiamento por VMC
 if vmcPartialLong
-    alert(f_get_json("VMC_PARTIAL_25_LONG"), alert.freq_once_per_bar_close)
+    alert(f_get_json("VMC_PARTIAL_25_LONG"), freq)
 
 if vmcPartialShort
-    alert(f_get_json("VMC_PARTIAL_25_SHORT"), alert.freq_once_per_bar_close)
+    alert(f_get_json("VMC_PARTIAL_25_SHORT"), freq)

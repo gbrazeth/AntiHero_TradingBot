@@ -41,8 +41,8 @@ export const webhookPayloadSchema = z.object({
 
     timestamp: z.string().datetime({ message: 'timestamp must be a valid ISO 8601 datetime' }),
 
-    bar_close: z.literal(true, {
-        message: 'bar_close must be true',
+    bar_close: z.boolean({
+        message: 'bar_close must be a boolean',
     }),
 
     event: z.enum(VALID_EVENTS, {
