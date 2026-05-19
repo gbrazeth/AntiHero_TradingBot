@@ -39,7 +39,7 @@ export const webhookPayloadSchema = z.object({
 
     price: z.number().positive('price must be positive'),
 
-    timestamp: z.string().datetime({ message: 'timestamp must be a valid ISO 8601 datetime' }),
+    timestamp: z.string(),
 
     bar_close: z.boolean({
         message: 'bar_close must be a boolean',
