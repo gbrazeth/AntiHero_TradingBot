@@ -1,0 +1,78 @@
+//@version=6
+strategy("AntiHero Bot - Phase 3 Backtester", overlay=true, initial_capital=1000, default_qty_type=strategy.cash, default_qty_value=50, commission_value=0.04)
+
+// =========================================================================
+// 1. Parâmetros e Inputs
+// =========================================================================
+var string GRP_RSI = "RSI Settings"
+rsiLength = input.int(14, title="RSI Length", group=GRP_RSI)
+rsiOverbought = input.int(70, title="RSI Overbought (Venda)", group=GRP_RSI)
+rsiOversold = input.int(30, title="RSI Oversold (Compra)", group=GRP_RSI)
+
+var string GRP_MACD = "MACD Settings"
+fastLength = input.int(12, title="Fast Length", group=GRP_MACD)
+slowLength = input.int(26, title="Slow Length", group=GRP_MACD)
+signalLength = input.int(9, title="Signal Smoothing", group=GRP_MACD)
+
+var string GRP_VMC = "VMC Settings (WaveTrend)"
+n1 = input.int(10, "Channel Length", group=GRP_VMC)
+n2 = input.int(21, "Average Length", group=GRP_VMC)
+
+var string GRP_RISK = "Risk Settings"
+sl_pct = input.float(1.0, title="Stop Loss (%)", group=GRP_RISK) / 100
+tp_pct = input.float(5.0, title="Take Profit Final (%)", group=GRP_RISK) / 100
+
+// =========================================================================
+// 2. Lógica do RSI (Entradas Principais)
+// =========================================================================
+rsiValue = ta.rsi(close, rsiLength)
+
+buySignal = ta.crossunder(rsiValue, rsiOversold)
+sellSignal = ta.crossover(rsiValue, rsiOverbought)
+
+// =========================================================================
+// 3. Lógica do MACD & VMC (Fatiamento)
+// =========================================================================
+[macdLine, signalLine, _] = ta.macd(close, fastLength, slowLength, signalLength)
+macdPartialLong = ta.crossunder(macdLine, signalLine)
+macdPartialShort = ta.crossover(macdLine, signalLine)
+
+ap = hlc3 
+esa = ta.ema(ap, n1)
+d = ta.ema(math.abs(ap - esa), n1)
+ci = (ap - esa) / (0.015 * d)
+tci = ta.ema(ci, n2)
+
+wt1 = tci
+wt2 = ta.sma(wt1, 4)
+
+vmcPartialShort = ta.crossover(wt1, wt2)
+vmcPartialLong = ta.crossunder(wt1, wt2)
+
+// =========================================================================
+// 4. Execução do Backtester
+// =========================================================================
+
+// Entradas
+if buySignal
+    strategy.entry("LONG", strategy.long)
+
+if sellSignal
+    strategy.entry("SHORT", strategy.short)
+
+// Stop Loss e Take Profit fixos
+strategy.exit("SL/TP Long", "LONG", stop=strategy.position_avg_price * (1 - sl_pct), limit=strategy.position_avg_price * (1 + tp_pct))
+strategy.exit("SL/TP Short", "SHORT", stop=strategy.position_avg_price * (1 + sl_pct), limit=strategy.position_avg_price * (1 - tp_pct))
+
+// Fatiamentos (Parciais de 25%)
+if strategy.position_size > 0
+    if macdPartialLong
+        strategy.close("LONG", qty_percent=25, comment="MACD Partial")
+    if vmcPartialLong
+        strategy.close("LONG", qty_percent=25, comment="VMC Partial")
+
+if strategy.position_size < 0
+    if macdPartialShort
+        strategy.close("SHORT", qty_percent=25, comment="MACD Partial")
+    if vmcPartialShort
+        strategy.close("SHORT", qty_percent=25, comment="VMC Partial")
