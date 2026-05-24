@@ -67,11 +67,13 @@ export class StrategyEngine {
             switch (payload.event as WebhookEvent) {
                 case 'MACD_ENTRY_LONG':
                 case 'RSI_ENTRY_LONG':
+                case 'TREND_ENTRY_LONG':
                     await this.handleEntry({ payload, signalId, side: 'LONG' });
                     break;
 
                 case 'MACD_ENTRY_SHORT':
                 case 'RSI_ENTRY_SHORT':
+                case 'TREND_ENTRY_SHORT':
                     await this.handleEntry({ payload, signalId, side: 'SHORT' });
                     break;
 
@@ -305,20 +307,24 @@ export class StrategyEngine {
             }
 
             if (tpQty > 0 && tpQty <= risk.qty) {
-                const tps = [risk.tp1Price, risk.tp2Price, risk.tp3Price, risk.tp4Price, risk.tp5Price];
+                const tps = risk.tpPrices;
                 let remainingQty = risk.qty;
                 
                 for (let i = 0; i < tps.length; i++) {
                     if (remainingQty < tpQty) break;
                     
+                    // For the very last TP, we use whatever is remaining to prevent dusting
+                    const isLast = (i === tps.length - 1);
+                    const finalQtyStr = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
+
                     await this.exchange.setTakeProfit({
                         symbol: payload.symbol,
                         side: exchangeSide,
                         tpPrice: String(tps[i]),
-                        qty: String(tpQty),
+                        qty: finalQtyStr,
                     });
                     
-                    remainingQty -= tpQty;
+                    remainingQty -= parseFloat(finalQtyStr);
                 }
             }
         } catch (err) {

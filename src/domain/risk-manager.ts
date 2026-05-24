@@ -15,11 +15,7 @@ export interface RiskResult {
     reason?: string;
     qty: number;
     slPrice: number;
-    tp1Price: number;
-    tp2Price: number;
-    tp3Price: number;
-    tp4Price: number;
-    tp5Price: number;
+    tpPrices: number[];
 }
 
 export interface BreakEvenResult {
@@ -53,7 +49,7 @@ export class RiskManager {
 
         if (dailyPnl?.isKillSwitchActive) {
             this.logger.warn({ date: today }, 'Kill switch active — entry blocked');
-            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tp1Price: 0, tp2Price: 0, tp3Price: 0, tp4Price: 0, tp5Price: 0 };
+            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tpPrices: [] };
         }
 
         if (dailyPnl) {
@@ -71,11 +67,7 @@ export class RiskManager {
                     reason: `Daily drawdown limit reached (${(lossRatio * 100).toFixed(2)}%)`,
                     qty: 0,
                     slPrice: 0,
-                    tp1Price: 0,
-                    tp2Price: 0,
-                    tp3Price: 0,
-                    tp4Price: 0,
-                    tp5Price: 0,
+                    tpPrices: [],
                 };
             }
         }
@@ -85,20 +77,25 @@ export class RiskManager {
         // 3. Calculate qty (fixed_usdt mode)
         const qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
 
-        // 4. Calculate SL price & TP prices (ROI targets at 20x leverage: 1%, 2%, 3%, 4%, 5%)
+        // 4. Calculate SL price & TP prices
         const slPrice = this.calcSl(params.side, params.entryPrice);
-        const tp1Price = this.calcTp(params.side, params.entryPrice, 0.0100); // 20% ROI
-        const tp2Price = this.calcTp(params.side, params.entryPrice, 0.0200); // 40% ROI
-        const tp3Price = this.calcTp(params.side, params.entryPrice, 0.0300); // 60% ROI
-        const tp4Price = this.calcTp(params.side, params.entryPrice, 0.0400); // 80% ROI
-        const tp5Price = this.calcTp(params.side, params.entryPrice, 0.0500); // 100% ROI
+        
+        // 10 ROI levels at 20x leverage
+        // 25%, 50%, 75%, 100%, 150%, 200%, 250%, 300%, 400%, 500%
+        const roiTargets = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 4.00, 5.00];
+        const leverage = 20;
+        
+        const tpPrices = roiTargets.map(roi => {
+            const priceMovePct = roi / leverage;
+            return this.calcTp(params.side, params.entryPrice, priceMovePct);
+        });
 
         this.logger.info(
-            { symbol: params.symbol, side: params.side, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price, tp5Price },
+            { symbol: params.symbol, side: params.side, qty, slPrice, tpPrices },
             'Risk check passed — entry allowed',
         );
 
-        return { allowed: true, qty, slPrice, tp1Price, tp2Price, tp3Price, tp4Price, tp5Price };
+        return { allowed: true, qty, slPrice, tpPrices };
     }
 
     /**
