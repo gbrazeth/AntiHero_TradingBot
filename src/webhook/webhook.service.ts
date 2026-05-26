@@ -50,7 +50,7 @@ export class WebhookService {
                 timeframe: payload.timeframe,
                 price: payload.price,
                 signalTimestamp: payload.timestamp,
-                barClose: payload.bar_close,
+                barClose: payload.bar_close ?? false,
                 event: payload.event,
                 idempotencyHash: hash,
             },
