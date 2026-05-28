@@ -69,11 +69,12 @@ export class TelegramNotifier {
         event: string;
     }): Promise<void> {
         const emoji = params.side === 'LONG' ? '🟢' : '🔴';
+        const baseAsset = params.symbol.replace('USDT', '');
         await this.send(
             `${emoji} *${params.side} ENTRY*\n` +
             `📊 Symbol: \`${params.symbol}\`\n` +
             `💰 Price: \`${params.price}\`\n` +
-            `📦 Qty: \`${params.qty} USDT\`\n` +
+            `📦 Qty: \`${params.qty} ${baseAsset}\`\n` +
             `🛡 SL: \`${params.slPrice}\`\n` +
             `📡 Signal: \`${params.event}\``,
         );
