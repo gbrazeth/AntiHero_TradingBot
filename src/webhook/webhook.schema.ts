@@ -45,7 +45,7 @@ export const webhookPayloadSchema = z.object({
 
     bar_close: z.boolean({
         message: 'bar_close must be a boolean',
-    }),
+    }).optional(),
 
     event: z.enum(VALID_EVENTS, {
         message: `event must be one of: ${VALID_EVENTS.join(', ')}`,
