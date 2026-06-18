@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { BinanceAdapter } from '../infra/binance-adapter.js';
 import { prisma } from '../infra/prisma.js';
+import { env } from '../config/env.js';
 
 /**
  * Status routes — check Binance connection and current position.
@@ -105,5 +106,97 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             app.log.error({ err }, 'Failed to fetch history from database');
             return reply.status(500).send({ status: 'error', message });
         }
+    });
+
+    /**
+     * GET /status/trade-logs
+     * Fetches recent trade log events (entries, partial TPs, SL hits, etc.)
+     * Optional query: ?positionId=X to filter by position
+     */
+    app.get('/status/trade-logs', async (request, reply) => {
+        try {
+            const query = request.query as { positionId?: string };
+            const where = query.positionId
+                ? { positionId: parseInt(query.positionId, 10) }
+                : {};
+
+            const logs = await prisma.tradeLog.findMany({
+                where,
+                orderBy: { createdAt: 'desc' },
+                take: 50,
+            });
+            return reply.status(200).send({ status: 'ok', logs });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            app.log.error({ err }, 'Failed to fetch trade logs');
+            return reply.status(500).send({ status: 'error', message });
+        }
+    });
+
+    /**
+     * GET /status/pnl-summary
+     * Returns a breakdown of realized and unrealized PnL.
+     */
+    app.get('/status/pnl-summary', async (_request, reply) => {
+        try {
+            // Total realized PnL from all closed positions
+            const closedPositions = await prisma.position.findMany({
+                where: { status: 'closed' },
+                select: { realizedPnl: true },
+            });
+            const totalRealizedPnl = closedPositions.reduce(
+                (sum, p) => sum + (p.realizedPnl ?? 0), 0
+            );
+
+            // Today's PnL from daily_pnl table
+            const today = new Date().toISOString().slice(0, 10);
+            const dailyPnl = await prisma.dailyPnl.findUnique({
+                where: { date: today },
+            });
+
+            // Partial profits from current open position's trade logs
+            const openPosition = await prisma.position.findFirst({
+                where: { status: 'open' },
+            });
+            let partialProfitsTaken = 0;
+            if (openPosition) {
+                const partialLogs = await prisma.tradeLog.findMany({
+                    where: {
+                        positionId: openPosition.id,
+                        event: { in: ['PARTIAL_TP', 'PARTIAL_EXIT'] },
+                    },
+                    select: { pnl: true },
+                });
+                partialProfitsTaken = partialLogs.reduce(
+                    (sum, l) => sum + (l.pnl ?? 0), 0
+                );
+            }
+
+            return reply.status(200).send({
+                status: 'ok',
+                summary: {
+                    totalRealizedPnl: parseFloat(totalRealizedPnl.toFixed(4)),
+                    todayRealizedPnl: dailyPnl ? dailyPnl.realizedPnl : 0,
+                    todayUnrealizedPnl: dailyPnl ? dailyPnl.unrealizedPnl : 0,
+                    partialProfitsTaken: parseFloat(partialProfitsTaken.toFixed(4)),
+                },
+            });
+        } catch (err) {
+            const message = err instanceof Error ? err.message : String(err);
+            app.log.error({ err }, 'Failed to compute PnL summary');
+            return reply.status(500).send({ status: 'error', message });
+        }
+    });
+
+    /**
+     * GET /status/network
+     * Returns whether the bot is connected to testnet or mainnet.
+     */
+    app.get('/status/network', async (_request, reply) => {
+        const isMainnet = env.BINANCE_BASE_URL.includes('fapi.binance.com');
+        return reply.send({
+            network: isMainnet ? 'mainnet' : 'testnet',
+            baseUrl: env.BINANCE_BASE_URL,
+        });
     });
 }

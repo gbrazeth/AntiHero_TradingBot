@@ -132,6 +132,20 @@ export class StrategyEngine {
                     where: { id: dbPos.id },
                     data: { status: 'closed', currentQty: 0 },
                 });
+
+                // Log the full close / SL hit event
+                await prisma.tradeLog.create({
+                    data: {
+                        positionId: dbPos.id,
+                        event: 'SL_HIT',
+                        side: dbPos.side,
+                        symbol: dbPos.symbol,
+                        qty: dbPos.currentQty,
+                        price: dbPos.entryPrice,
+                        pnl: dbPos.realizedPnl ?? 0,
+                        details: 'Position fully closed on Binance (SL or manual)',
+                    },
+                });
             } else if (dbPos && realPos) {
                 const realQty = parseFloat(realPos.size);
                 if (realQty > 0 && realQty < dbPos.currentQty - 0.001) {
@@ -168,12 +182,34 @@ export class StrategyEngine {
                         data: { currentQty: realQty, slPrice: newSlPrice, beApplied: isFirstPartial ? true : dbPos.beApplied },
                     });
 
-                    const pctClosed = ((dbPos.currentQty - realQty) / dbPos.currentQty) * 100;
+                    const closedQty = dbPos.currentQty - realQty;
+                    const pctClosed = (closedQty / dbPos.qty) * 100;
+                    const partialPnl = dbPos.side === 'BUY'
+                        ? (parseFloat(realPos.markPrice) - dbPos.entryPrice) * closedQty
+                        : (dbPos.entryPrice - parseFloat(realPos.markPrice)) * closedQty;
+                    const margin = (closedQty * dbPos.entryPrice) / 20;
+                    const roiPct = margin > 0 ? (partialPnl / margin) * 100 : 0;
+
+                    // Log the native partial TP event
+                    await prisma.tradeLog.create({
+                        data: {
+                            positionId: dbPos.id,
+                            event: 'PARTIAL_TP',
+                            side: dbPos.side,
+                            symbol: dbPos.symbol,
+                            qty: closedQty,
+                            price: parseFloat(realPos.markPrice),
+                            pnl: parseFloat(partialPnl.toFixed(4)),
+                            roiPct: parseFloat(roiPct.toFixed(2)),
+                            details: `TP hit: ${pctClosed.toFixed(1)}% of position closed${isFirstPartial ? ' + Break-even applied' : ''}`,
+                        },
+                    });
+
                     await this.telegram.notifyPartialExit({
                         symbol: dbPos.symbol,
                         pct: parseFloat(pctClosed.toFixed(2)),
-                        price: dbPos.entryPrice, // approx fill price
-                        closedQty: String((dbPos.currentQty - realQty).toFixed(3)),
+                        price: dbPos.entryPrice,
+                        closedQty: String(closedQty.toFixed(3)),
                         event: 'NATIVE_PARTIAL_HIT'
                     });
                 } else if (realQty > dbPos.currentQty + 0.001) {
@@ -272,7 +308,7 @@ export class StrategyEngine {
         });
 
         // 6. Persist position
-        await prisma.position.create({
+        const newPosition = await prisma.position.create({
             data: {
                 symbol: payload.symbol,
                 side: exchangeSide,
@@ -281,6 +317,19 @@ export class StrategyEngine {
                 currentQty: risk.qty,
                 slPrice: risk.slPrice,
                 status: 'open',
+            },
+        });
+
+        // 6b. Log entry event
+        await prisma.tradeLog.create({
+            data: {
+                positionId: newPosition.id,
+                event: 'ENTRY',
+                side: exchangeSide,
+                symbol: payload.symbol,
+                qty: risk.qty,
+                price: payload.price,
+                details: `${side} entry at ${payload.price} | SL: ${risk.slPrice} | Leverage: 20x`,
             },
         });
 
@@ -458,6 +507,23 @@ export class StrategyEngine {
                 beApplied: true,
                 realizedPnl: currentRealized + pnl,
                 status: positionFullyClosed ? 'closed' : 'open',
+            },
+        });
+
+        // 6b. Log partial exit event
+        const partialMargin = (partial.qtyToClose * position.entryPrice) / 20;
+        const partialRoi = partialMargin > 0 ? (pnl / partialMargin) * 100 : 0;
+        await prisma.tradeLog.create({
+            data: {
+                positionId: position.id,
+                event: positionFullyClosed ? 'FULL_CLOSE' : 'PARTIAL_EXIT',
+                side: position.side,
+                symbol: payload.symbol,
+                qty: partial.qtyToClose,
+                price: payload.price,
+                pnl: parseFloat(pnl.toFixed(4)),
+                roiPct: parseFloat(partialRoi.toFixed(2)),
+                details: `${(pct * 100).toFixed(0)}% partial exit via webhook${isFirstPartial ? ' + Break-even applied' : ''}`,
             },
         });
 

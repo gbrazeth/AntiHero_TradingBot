@@ -15,7 +15,7 @@ const envSchema = z.object({
     // Binance
     BINANCE_API_KEY: z.string().default(''),
     BINANCE_API_SECRET: z.string().default(''),
-    BINANCE_BASE_URL: z.string().url().default('https://testnet.binancefuture.com'),
+    BINANCE_BASE_URL: z.string().url('BINANCE_BASE_URL must be a valid URL'),
     MOCK_EXCHANGE: z
         .string()
         .default('false')

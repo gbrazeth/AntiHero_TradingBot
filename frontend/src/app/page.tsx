@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Activity, Wallet, RefreshCw, BarChart2, ShieldAlert } from 'lucide-react';
+import { Activity, Wallet, RefreshCw, BarChart2, ShieldAlert, ScrollText, TrendingUp } from 'lucide-react';
 
 interface PositionData {
   symbol: string;
@@ -35,10 +35,44 @@ interface HistoryPosition {
   updatedAt: string;
 }
 
+interface TradeLogEntry {
+  id: number;
+  positionId: number;
+  event: string;
+  side: string;
+  symbol: string;
+  qty: number;
+  price: number;
+  pnl: number | null;
+  roiPct: number | null;
+  details: string | null;
+  createdAt: string;
+}
+
+interface PnlSummary {
+  totalRealizedPnl: number;
+  todayRealizedPnl: number;
+  todayUnrealizedPnl: number;
+  partialProfitsTaken: number;
+}
+
+const EVENT_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
+  ENTRY: { emoji: '🟢', label: 'Entry', color: 'text-success' },
+  PARTIAL_TP: { emoji: '🔶', label: 'Partial TP', color: 'text-warning' },
+  PARTIAL_EXIT: { emoji: '🔶', label: 'Partial Exit', color: 'text-warning' },
+  BREAK_EVEN: { emoji: '⚡', label: 'Break-Even', color: 'text-accent' },
+  SL_HIT: { emoji: '🔴', label: 'Stop Loss', color: 'text-danger' },
+  FULL_CLOSE: { emoji: '⬜', label: 'Full Close', color: 'text-secondary' },
+  REVERSAL: { emoji: '🔄', label: 'Reversal', color: 'text-accent' },
+};
+
 export default function Dashboard() {
   const [position, setPosition] = useState<PositionData | 'FLAT' | null>(null);
   const [balance, setBalance] = useState<BalanceData[]>([]);
   const [history, setHistory] = useState<HistoryPosition[]>([]);
+  const [tradeLogs, setTradeLogs] = useState<TradeLogEntry[]>([]);
+  const [pnlSummary, setPnlSummary] = useState<PnlSummary | null>(null);
+  const [network, setNetwork] = useState<'testnet' | 'mainnet'>('testnet');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +95,6 @@ export default function Dashboard() {
         setPosition(posData.position === 'FLAT' ? 'FLAT' : posData.position);
       } catch (err) {
         console.error('Position fetch error:', err);
-        // Do not re-throw here so the balance fetch can still run
       }
 
       // Fetch Balance
@@ -85,6 +118,39 @@ export default function Dashboard() {
         }
       } catch (err) {
         console.error('History fetch error:', err);
+      }
+
+      // Fetch Trade Logs
+      try {
+        const logsRes = await fetch(`${API_URL}/status/trade-logs`);
+        if (logsRes.ok) {
+          const logsData = await logsRes.json();
+          setTradeLogs(logsData.logs || []);
+        }
+      } catch (err) {
+        console.error('Trade logs fetch error:', err);
+      }
+
+      // Fetch PnL Summary
+      try {
+        const pnlRes = await fetch(`${API_URL}/status/pnl-summary`);
+        if (pnlRes.ok) {
+          const pnlData = await pnlRes.json();
+          setPnlSummary(pnlData.summary || null);
+        }
+      } catch (err) {
+        console.error('PnL summary fetch error:', err);
+      }
+
+      // Fetch Network
+      try {
+        const netRes = await fetch(`${API_URL}/status/network`);
+        if (netRes.ok) {
+          const netData = await netRes.json();
+          setNetwork(netData.network || 'testnet');
+        }
+      } catch (err) {
+        console.error('Network fetch error:', err);
       }
       
       setError(null);
@@ -119,6 +185,9 @@ export default function Dashboard() {
     return roe.toFixed(2);
   };
 
+  const networkLabel = network === 'mainnet' ? 'Mainnet' : 'Testnet';
+  const networkBadgeClass = network === 'mainnet' ? 'network-badge-mainnet' : 'network-badge-testnet';
+
   return (
     <div className="dashboard-container">
       <header className="header">
@@ -128,10 +197,12 @@ export default function Dashboard() {
         </div>
         
         <div className="header-actions">
-          <div className="status-badge">
+          <div className={`status-badge ${networkBadgeClass}`}>
             <div className={`status-dot ${error ? 'offline' : 'online'}`}></div>
-            {error ? 'API Offline' : 'API Online'}
+            {error ? 'API Offline' : `API Online`}
           </div>
+
+          <span className={`network-tag ${networkBadgeClass}`}>{networkLabel}</span>
           
           <button 
             className="refresh-button text-danger"
@@ -196,13 +267,38 @@ export default function Dashboard() {
                 <span className="stat-value">{usdtBalance ? parseFloat(usdtBalance.equity).toFixed(2) : '0.00'}</span>
                 <span className="currency">USDT</span>
               </div>
-              <span className="stat-label">Total Equity (Testnet)</span>
+              <span className="stat-label">Total Equity ({networkLabel})</span>
               
               <div className="wallet-details">
                 <div className="info-row">
                   <span className="info-label">Available Balance</span>
                   <span className="info-value">{usdtBalance ? parseFloat(usdtBalance.availableBalance).toFixed(2) : '0.00'} USDT</span>
                 </div>
+                
+                {pnlSummary && (
+                  <>
+                    <div className="info-row">
+                      <span className="info-label">Realized PnL (Total)</span>
+                      <span className={`info-value ${pnlSummary.totalRealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {pnlSummary.totalRealizedPnl > 0 ? '+' : ''}${pnlSummary.totalRealizedPnl.toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">Today&apos;s PnL</span>
+                      <span className={`info-value ${pnlSummary.todayRealizedPnl >= 0 ? 'text-success' : 'text-danger'}`}>
+                        {pnlSummary.todayRealizedPnl > 0 ? '+' : ''}${pnlSummary.todayRealizedPnl.toFixed(2)}
+                      </span>
+                    </div>
+                    {pnlSummary.partialProfitsTaken !== 0 && (
+                      <div className="info-row">
+                        <span className="info-label">Partial Profits (Current)</span>
+                        <span className={`info-value ${pnlSummary.partialProfitsTaken >= 0 ? 'text-success' : 'text-danger'}`}>
+                          {pnlSummary.partialProfitsTaken > 0 ? '+' : ''}${pnlSummary.partialProfitsTaken.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             </>
           )}
@@ -271,18 +367,83 @@ export default function Dashboard() {
         </div>
       </div>
 
+      {/* TRADE LOG CARD */}
+      <div className="card mt-6">
+        <div className="card-header">
+          <ScrollText size={20} className="text-accent" />
+          <span className="card-title">Trade Log</span>
+          <span className="trade-log-count">{tradeLogs.length} events</span>
+        </div>
+        
+        {loading ? (
+          <div className="skeleton skeleton-text history-skeleton"></div>
+        ) : tradeLogs.length === 0 ? (
+          <div className="position-empty history-empty">
+            <span className="stat-label">No trade events recorded yet. Events will appear here once the bot executes trades.</span>
+          </div>
+        ) : (
+          <div className="history-table-container">
+            <table className="history-table">
+              <thead>
+                <tr className="history-thead-tr">
+                  <th className="history-th">Date/Time</th>
+                  <th>Event</th>
+                  <th>Symbol</th>
+                  <th>Side</th>
+                  <th>Qty</th>
+                  <th>Price</th>
+                  <th>PnL</th>
+                  <th>ROI%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tradeLogs.map((log) => {
+                  const config = EVENT_CONFIG[log.event] || { emoji: '❓', label: log.event, color: 'text-secondary' };
+                  return (
+                    <tr key={log.id} className="history-tr">
+                      <td className="history-td">
+                        {new Date(log.createdAt).toLocaleString()}
+                      </td>
+                      <td>
+                        <span className={`trade-event-badge ${config.color}`}>
+                          {config.emoji} {config.label}
+                        </span>
+                      </td>
+                      <td><span className="stat-value text-small">{log.symbol}</span></td>
+                      <td>
+                        <span className={`badge badge-sm ${log.side === 'BUY' ? 'long' : 'short'}`}>
+                          {log.side === 'BUY' ? 'LONG' : 'SHORT'}
+                        </span>
+                      </td>
+                      <td>{log.qty.toFixed(3)}</td>
+                      <td>${log.price.toFixed(2)}</td>
+                      <td className={`font-bold ${log.pnl !== null ? (log.pnl >= 0 ? 'text-success' : 'text-danger') : ''}`}>
+                        {log.pnl !== null ? `${log.pnl > 0 ? '+' : ''}$${log.pnl.toFixed(2)}` : '—'}
+                      </td>
+                      <td className={`font-bold ${log.roiPct !== null ? (log.roiPct >= 0 ? 'text-success' : 'text-danger') : ''}`}>
+                        {log.roiPct !== null ? `${log.roiPct > 0 ? '+' : ''}${log.roiPct.toFixed(1)}%` : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* HISTORY CARD */}
       <div className="card mt-6">
         <div className="card-header">
-          <Activity size={20} className="text-secondary" />
-          <span className="card-title">Recent Transactions</span>
+          <TrendingUp size={20} className="text-secondary" />
+          <span className="card-title">Recent Positions</span>
         </div>
         
         {loading ? (
           <div className="skeleton skeleton-text history-skeleton"></div>
         ) : history.length === 0 ? (
           <div className="position-empty history-empty">
-            <span className="stat-label">No transaction history yet.</span>
+            <span className="stat-label">No position history yet.</span>
           </div>
         ) : (
           <div className="history-table-container">

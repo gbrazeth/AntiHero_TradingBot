@@ -83,3 +83,19 @@ model Setting {
 
   @@map("settings")
 }
+
+model TradeLog {
+  id         Int      @id @default(autoincrement())
+  positionId Int      @map("position_id")
+  event      String   // ENTRY, PARTIAL_TP, BREAK_EVEN, SL_HIT, FULL_CLOSE, REVERSAL
+  side       String   // BUY or SELL
+  symbol     String
+  qty        Float
+  price      Float
+  pnl        Float?
+  roiPct     Float?   @map("roi_pct")
+  details    String?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@map("trade_logs")
+}
