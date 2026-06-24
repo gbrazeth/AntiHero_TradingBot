@@ -202,6 +202,12 @@ export class BinanceAdapter {
     // ── Private HTTP helpers ─────────────────────────────────────────────
 
     private sign(queryString: string): string {
+        // If the secret looks like a PEM private key (RSA/Ed25519)
+        if (this.apiSecret.includes('BEGIN PRIVATE KEY')) {
+            // Asymmetric signature (RSA/Ed25519) requires base64 output
+            return crypto.sign(null, Buffer.from(queryString), this.apiSecret).toString('base64');
+        }
+        // Otherwise use HMAC-SHA256 (System Generated keys)
         return crypto.createHmac('sha256', this.apiSecret).update(queryString).digest('hex');
     }
 
@@ -218,7 +224,7 @@ export class BinanceAdapter {
         const qsWithRecv = `${baseQs}recvWindow=${this.recvWindow}&timestamp=${timestamp}`;
         const signature = this.sign(qsWithRecv);
         
-        const finalQs = `${qsWithRecv}&signature=${signature}`;
+        const finalQs = `${qsWithRecv}&signature=${encodeURIComponent(signature)}`;
         const url = `${this.baseUrl}${path}?${finalQs}`;
         
         try {
@@ -250,7 +256,7 @@ export class BinanceAdapter {
         const qsWithRecv = `${baseQs}recvWindow=${this.recvWindow}&timestamp=${timestamp}`;
         const signature = this.sign(qsWithRecv);
         
-        const finalQs = `${qsWithRecv}&signature=${signature}`;
+        const finalQs = `${qsWithRecv}&signature=${encodeURIComponent(signature)}`;
         const url = `${this.baseUrl}${path}?${finalQs}`;
 
         try {
