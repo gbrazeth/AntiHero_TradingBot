@@ -234,6 +234,10 @@ export class BinanceAdapter {
             });
 
             const data = await response.json() as Record<string, unknown>;
+            if (!response.ok) {
+                this.logger.error({ status: response.status, data }, 'Binance API HTTP Error');
+                throw new Error(`Binance HTTP ${response.status}: ${JSON.stringify(data)}`);
+            }
             this.assertSuccess(data, path);
             return data as unknown as T;
         } catch (err) {
@@ -266,6 +270,10 @@ export class BinanceAdapter {
             });
 
             const data = await response.json() as Record<string, unknown>;
+            if (!response.ok) {
+                this.logger.error({ status: response.status, data }, 'Binance API HTTP Error');
+                throw new Error(`Binance HTTP ${response.status}: ${JSON.stringify(data)}`);
+            }
             this.assertSuccess(data, path);
             return data as unknown as T;
         } catch (err) {
