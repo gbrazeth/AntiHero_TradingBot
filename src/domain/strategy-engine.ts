@@ -345,36 +345,41 @@ export class StrategyEngine {
             this.logger.warn({ err }, 'Failed to set initial stop loss');
         }
 
-        // 8. Set Take Profits natively (10% of total position each)
+        // 8. Set Take Profits natively (13 levels based on ROI)
         try {
-            let tpQty = parseFloat((risk.qty * 0.10).toFixed(3));
+            const tps = risk.tps;
+            let remainingQty = risk.qty;
             
-            // Binance MIN_NOTIONAL is 5 USDT. We force at least 6 USDT worth to be safe.
-            const minQty = parseFloat((6.0 / payload.price).toFixed(3));
-            if (tpQty < minQty) {
-                tpQty = minQty;
-            }
-
-            if (tpQty > 0 && tpQty <= risk.qty) {
-                const tps = risk.tpPrices;
-                let remainingQty = risk.qty;
+            for (let i = 0; i < tps.length; i++) {
+                const tp = tps[i];
+                if (!tp) continue;
+                if (remainingQty <= 0.001) break; // Float precision safeguard
                 
-                for (let i = 0; i < tps.length; i++) {
-                    if (remainingQty < tpQty) break;
-                    
-                    // For the very last TP, we use whatever is remaining to prevent dusting
-                    const isLast = (i === tps.length - 1);
-                    const finalQtyStr = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
-
-                    await this.exchange.setTakeProfit({
-                        symbol: payload.symbol,
-                        side: exchangeSide,
-                        tpPrice: String(tps[i]),
-                        qty: finalQtyStr,
-                    });
-                    
-                    remainingQty -= parseFloat(finalQtyStr);
+                let tpQty = parseFloat((risk.qty * tp.pct).toFixed(3));
+                
+                // Binance MIN_NOTIONAL is 5 USDT. We force at least 6 USDT worth to be safe.
+                const minQty = parseFloat((6.0 / payload.price).toFixed(3));
+                if (tpQty < minQty) {
+                    tpQty = minQty;
                 }
+                
+                // Don't exceed remaining
+                if (tpQty > remainingQty) {
+                    tpQty = remainingQty;
+                }
+                
+                // For the very last TP, we use whatever is remaining to prevent dusting
+                const isLast = (i === tps.length - 1);
+                const finalQtyStr = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
+
+                await this.exchange.setTakeProfit({
+                    symbol: payload.symbol,
+                    side: exchangeSide,
+                    tpPrice: String(tp.price),
+                    qty: finalQtyStr,
+                });
+                
+                remainingQty -= parseFloat(finalQtyStr);
             }
         } catch (err) {
             this.logger.warn({ err }, 'Failed to set take profit limit orders');

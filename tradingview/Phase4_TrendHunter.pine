@@ -35,10 +35,10 @@ getJson(event) =>
     '{"strategy_id": "' + strategyId + '","exchange":"' + exchange + '","symbol":"' + syminfo.ticker + '","timeframe":"' + timeframeInput + '","event":"' + event + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format("{0,date,yyyy-MM-dd'T'HH:mm:ssZ}", time) + '"}'
 
 if buySignal
-    alert(getJson("TREND_ENTRY_LONG"), alert.freq_once_per_bar_close)
+    alert(getJson("TREND_ENTRY_LONG"), alert.freq_once_per_bar)
 
 if sellSignal
-    alert(getJson("TREND_ENTRY_SHORT"), alert.freq_once_per_bar_close)
+    alert(getJson("TREND_ENTRY_SHORT"), alert.freq_once_per_bar)
 
 // Plot
 plotshape(buySignal, title="LONG", style=shape.labelup, location=location.belowbar, color=color.new(color.green, 0), text="LONG", textcolor=color.white, size=size.small)

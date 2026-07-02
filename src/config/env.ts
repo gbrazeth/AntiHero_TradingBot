@@ -36,6 +36,7 @@ const envSchema = z.object({
     QTY_MODE: z.enum(['fixed_usdt']).default('fixed_usdt'),
     QTY_VALUE_USDT: z.coerce.number().default(50),
     MIN_REMAINING_POSITION_PCT: z.coerce.number().default(0.10),
+    LEVERAGE: z.coerce.number().default(60),
 });
 
 export type Env = z.infer<typeof envSchema>;

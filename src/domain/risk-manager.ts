@@ -15,7 +15,7 @@ export interface RiskResult {
     reason?: string;
     qty: number;
     slPrice: number;
-    tpPrices: number[];
+    tps: { price: number; pct: number }[];
 }
 
 export interface BreakEvenResult {
@@ -49,7 +49,7 @@ export class RiskManager {
 
         if (dailyPnl?.isKillSwitchActive) {
             this.logger.warn({ date: today }, 'Kill switch active — entry blocked');
-            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tpPrices: [] };
+            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tps: [] };
         }
 
         if (dailyPnl) {
@@ -67,7 +67,7 @@ export class RiskManager {
                     reason: `Daily drawdown limit reached (${(lossRatio * 100).toFixed(2)}%)`,
                     qty: 0,
                     slPrice: 0,
-                    tpPrices: [],
+                    tps: [],
                 };
             }
         }
@@ -80,22 +80,44 @@ export class RiskManager {
         // 4. Calculate SL price & TP prices
         const slPrice = this.calcSl(params.side, params.entryPrice);
         
-        // 10 ROI levels at 20x leverage
-        // 25%, 50%, 75%, 100%, 150%, 200%, 250%, 300%, 400%, 500%
-        const roiTargets = [0.25, 0.50, 0.75, 1.00, 1.50, 2.00, 2.50, 3.00, 4.00, 5.00];
-        const leverage = 20;
+        // New strategy:
+        // 10% slice at ROIs: 5%, 10%, 15%, 20%, 50%, 75%, 100%
+        // 5% slice at ROIs: 150%, 200%, 250%, 300%, 400%, 500%
+        const roiTargets = [
+            { roi: 0.05, pct: 0.10 },
+            { roi: 0.10, pct: 0.10 },
+            { roi: 0.15, pct: 0.10 },
+            { roi: 0.20, pct: 0.10 },
+            { roi: 0.50, pct: 0.10 },
+            { roi: 0.75, pct: 0.10 },
+            { roi: 1.00, pct: 0.10 },
+            { roi: 1.50, pct: 0.05 },
+            { roi: 2.00, pct: 0.05 },
+            { roi: 2.50, pct: 0.05 },
+            { roi: 3.00, pct: 0.05 },
+            { roi: 4.00, pct: 0.05 },
+            { roi: 5.00, pct: 0.05 }
+        ];
         
-        const tpPrices = roiTargets.map(roi => {
-            const priceMovePct = roi / leverage;
-            return this.calcTp(params.side, params.entryPrice, priceMovePct);
+        // Leverage assumption for ROI math. If using cross margin or different leverage,
+        // this needs to match what is set on Binance. Default is 20x or 60x.
+        // I will use 60 as per recent testing, but if env.LEVERAGE exists we should use it.
+        const leverage = env.LEVERAGE || 60;
+        
+        const tps = roiTargets.map(t => {
+            const priceMovePct = t.roi / leverage;
+            return {
+                price: this.calcTp(params.side, params.entryPrice, priceMovePct),
+                pct: t.pct
+            };
         });
 
         this.logger.info(
-            { symbol: params.symbol, side: params.side, qty, slPrice, tpPrices },
+            { symbol: params.symbol, side: params.side, qty, slPrice, tps },
             'Risk check passed — entry allowed',
         );
 
-        return { allowed: true, qty, slPrice, tpPrices };
+        return { allowed: true, qty, slPrice, tps };
     }
 
     /**
