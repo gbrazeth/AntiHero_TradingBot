@@ -29,13 +29,9 @@ export type WebhookEvent = (typeof VALID_EVENTS)[number];
 export const webhookPayloadSchema = z.object({
     strategy_id: z.string().min(1, 'strategy_id is required'),
 
-    exchange: z.literal('BINANCE_TESTNET', {
-        message: 'exchange must be BINANCE_TESTNET',
-    }),
+    exchange: z.string().min(1, 'exchange is required'),
 
-    symbol: z.literal('ETHUSDT', {
-        message: 'symbol must be ETHUSDT',
-    }),
+    symbol: z.string().min(1, 'symbol is required'),
 
     timeframe: z.string().min(1, 'timeframe is required'),
 
