@@ -10,3 +10,6 @@ src/generated/
 test-binance.ts
 test-keys.ts
 *.pdf
+*.pem
+scripts/wipe-db.ts
+test-zod.ts

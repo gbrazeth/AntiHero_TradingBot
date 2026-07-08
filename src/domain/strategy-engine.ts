@@ -187,7 +187,8 @@ export class StrategyEngine {
                     const partialPnl = dbPos.side === 'BUY'
                         ? (parseFloat(realPos.markPrice) - dbPos.entryPrice) * closedQty
                         : (dbPos.entryPrice - parseFloat(realPos.markPrice)) * closedQty;
-                    const margin = (closedQty * dbPos.entryPrice) / 20;
+                    const leverage = env.LEVERAGE || 60;
+                    const margin = (closedQty * dbPos.entryPrice) / leverage;
                     const roiPct = margin > 0 ? (partialPnl / margin) * 100 : 0;
 
                     // Log the native partial TP event
@@ -328,8 +329,7 @@ export class StrategyEngine {
                 side: exchangeSide,
                 symbol: payload.symbol,
                 qty: risk.qty,
-                price: payload.price,
-                details: `${side} entry at ${payload.price} | SL: ${risk.slPrice} | Leverage: 20x`,
+                details: `${side} entry at ${payload.price} | SL: ${risk.slPrice} | Leverage: ${env.LEVERAGE || 60}x`,
             },
         });
 
