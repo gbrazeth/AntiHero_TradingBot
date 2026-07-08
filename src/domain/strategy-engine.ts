@@ -187,8 +187,7 @@ export class StrategyEngine {
                     const partialPnl = dbPos.side === 'BUY'
                         ? (parseFloat(realPos.markPrice) - dbPos.entryPrice) * closedQty
                         : (dbPos.entryPrice - parseFloat(realPos.markPrice)) * closedQty;
-                    const leverage = env.LEVERAGE || 60;
-                    const margin = (closedQty * dbPos.entryPrice) / leverage;
+                    const margin = (closedQty * dbPos.entryPrice) / (env.LEVERAGE || 60);
                     const roiPct = margin > 0 ? (partialPnl / margin) * 100 : 0;
 
                     // Log the native partial TP event
@@ -329,7 +328,8 @@ export class StrategyEngine {
                 side: exchangeSide,
                 symbol: payload.symbol,
                 qty: risk.qty,
-                details: `${side} entry at ${payload.price} | SL: ${risk.slPrice} | Leverage: ${env.LEVERAGE || 60}x`,
+                price: payload.price,
+                details: `${side} entry at ${payload.price} | SL: ${risk.slPrice} | Leverage: 20x`,
             },
         });
 
@@ -516,7 +516,7 @@ export class StrategyEngine {
         });
 
         // 6b. Log partial exit event
-        const partialMargin = (partial.qtyToClose * position.entryPrice) / 20;
+        const partialMargin = (partial.qtyToClose * position.entryPrice) / (env.LEVERAGE || 60);
         const partialRoi = partialMargin > 0 ? (pnl / partialMargin) * 100 : 0;
         await prisma.tradeLog.create({
             data: {
