@@ -133,6 +133,14 @@ export class StrategyEngine {
                     data: { status: 'closed', currentQty: 0 },
                 });
 
+                const closePrice = dbPos.slPrice || dbPos.entryPrice;
+                const slHitPnl = dbPos.side === 'BUY'
+                    ? (closePrice - dbPos.entryPrice) * dbPos.currentQty
+                    : (dbPos.entryPrice - closePrice) * dbPos.currentQty;
+
+                const margin = (dbPos.currentQty * dbPos.entryPrice) / (env.LEVERAGE || 60);
+                const roiPct = margin > 0 ? (slHitPnl / margin) * 100 : 0;
+
                 // Log the full close / SL hit event
                 await prisma.tradeLog.create({
                     data: {
@@ -141,8 +149,9 @@ export class StrategyEngine {
                         side: dbPos.side,
                         symbol: dbPos.symbol,
                         qty: dbPos.currentQty,
-                        price: dbPos.entryPrice,
-                        pnl: dbPos.realizedPnl ?? 0,
+                        price: closePrice,
+                        pnl: parseFloat(slHitPnl.toFixed(4)),
+                        roiPct: parseFloat(roiPct.toFixed(2)),
                         details: 'Position fully closed on Binance (SL or manual)',
                     },
                 });
