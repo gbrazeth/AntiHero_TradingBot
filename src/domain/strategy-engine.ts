@@ -128,15 +128,22 @@ export class StrategyEngine {
 
             if (dbPos && !realPos) {
                 this.logger.info({ symbol, posId: dbPos.id }, 'Sync: Position closed on Binance (likely SL/TP). Updating DB.');
-                await prisma.position.update({
-                    where: { id: dbPos.id },
-                    data: { status: 'closed', currentQty: 0 },
-                });
 
                 const closePrice = dbPos.slPrice || dbPos.entryPrice;
                 const slHitPnl = dbPos.side === 'BUY'
                     ? (closePrice - dbPos.entryPrice) * dbPos.currentQty
                     : (dbPos.entryPrice - closePrice) * dbPos.currentQty;
+
+                const currentRealized = dbPos.realizedPnl || 0;
+
+                await prisma.position.update({
+                    where: { id: dbPos.id },
+                    data: { 
+                        status: 'closed', 
+                        currentQty: 0,
+                        realizedPnl: currentRealized + slHitPnl
+                    },
+                });
 
                 const margin = (dbPos.currentQty * dbPos.entryPrice) / (env.LEVERAGE || 60);
                 const roiPct = margin > 0 ? (slHitPnl / margin) * 100 : 0;
