@@ -275,6 +275,12 @@ export class StrategyEngine {
                     qty: String(openPos.currentQty),
                     reduceOnly: true,
                 });
+
+                // Cancel all existing open orders (TPs, SLs)
+                await this.exchange.cancelAllOpenOrders(payload.symbol);
+
+                // Give Binance matching engine time to free up margin
+                await new Promise(res => setTimeout(res, 1500));
                 
                 // Calculate PNL based on closing the previous position
                 const closedQty = openPos.currentQty;

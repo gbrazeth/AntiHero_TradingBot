@@ -183,6 +183,22 @@ export class BinanceAdapter {
         this.logger.info({ symbol: params.symbol, tpPrice: params.tpPrice }, 'Take profit target set');
     }
 
+    async cancelAllOpenOrders(symbol: string): Promise<void> {
+        if (env.MOCK_EXCHANGE) {
+            this.logger.info({ symbol, mode: 'MOCK' }, 'MOCK: Cancelling all open orders');
+            return;
+        }
+
+        this.logger.info({ symbol }, 'Cancelling all open orders on Binance');
+        const qsParams = new URLSearchParams({ symbol });
+        try {
+            await this.delete('/fapi/v1/allOpenOrders', qsParams.toString());
+            this.logger.info({ symbol }, 'All open orders cancelled');
+        } catch (err) {
+            this.logger.warn({ err, symbol }, 'Failed to cancel all open orders (maybe none existed)');
+        }
+    }
+
     async getWalletBalance(): Promise<{ coin: string; equity: string; availableBalance: string }[]> {
         if (env.MOCK_EXCHANGE) {
             this.logger.info({ mode: 'MOCK' }, 'MOCK: Fetching wallet balance');
@@ -245,6 +261,38 @@ export class BinanceAdapter {
                 this.logger.warn({ err, attempt, path }, 'Binance API error, retrying...');
                 await this.delay(500 * attempt);
                 return this.post<T>(path, qs, attempt + 1);
+            }
+            throw err;
+        }
+    }
+
+    private async delete<T>(path: string, qs: string, attempt = 1): Promise<T> {
+        const timestamp = Date.now().toString();
+        const baseQs = qs ? `${qs}&` : '';
+        const qsWithRecv = `${baseQs}recvWindow=${this.recvWindow}&timestamp=${timestamp}`;
+        const signature = this.sign(qsWithRecv);
+        
+        const finalQs = `${qsWithRecv}&signature=${encodeURIComponent(signature)}`;
+        const url = `${this.baseUrl}${path}?${finalQs}`;
+        
+        try {
+            const response = await fetch(url, {
+                method: 'DELETE',
+                headers: this.buildHeaders(),
+            });
+
+            const data = await response.json() as Record<string, unknown>;
+            if (!response.ok) {
+                this.logger.error({ status: response.status, data }, 'Binance API HTTP Error');
+                throw new Error(`Binance HTTP ${response.status}: ${JSON.stringify(data)}`);
+            }
+            this.assertSuccess(data, path);
+            return data as unknown as T;
+        } catch (err) {
+            if (this.shouldRetry(err, attempt)) {
+                this.logger.warn({ err, attempt, path }, 'Binance API error, retrying...');
+                await this.delay(500 * attempt);
+                return this.delete<T>(path, qs, attempt + 1);
             }
             throw err;
         }
