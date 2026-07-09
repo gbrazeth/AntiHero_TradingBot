@@ -4,6 +4,7 @@ import { prisma } from '../infra/prisma.js';
 import { RiskManager } from './risk-manager.js';
 import { BinanceAdapter } from '../infra/binance-adapter.js';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';
+import { env } from '../config/env.js';
 
 // ─── State Machine ────────────────────────────────────────────────────────
 //
