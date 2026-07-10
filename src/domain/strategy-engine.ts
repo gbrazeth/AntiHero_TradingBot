@@ -295,6 +295,24 @@ export class StrategyEngine {
                     where: { id: openPos.id },
                     data: { status: 'closed', currentQty: 0, realizedPnl: currentRealized + pnl },
                 });
+
+                const margin = (closedQty * openPos.entryPrice) / (env.LEVERAGE || 60);
+                const roiPct = margin > 0 ? (pnl / margin) * 100 : 0;
+
+                // Log the auto-reversal close event
+                await prisma.tradeLog.create({
+                    data: {
+                        positionId: openPos.id,
+                        event: 'Close (Reversal)',
+                        side: openPos.side,
+                        symbol: openPos.symbol,
+                        qty: closedQty,
+                        price: payload.price,
+                        pnl: parseFloat(pnl.toFixed(4)),
+                        roiPct: parseFloat(roiPct.toFixed(2)),
+                        details: `Position closed due to opposite trend signal`,
+                    },
+                });
             }
         }
 
