@@ -194,6 +194,12 @@ export class StrategyEngine {
                         }
                     }
 
+                    const closedQty = dbPos.currentQty - realQty;
+                    const pctClosed = (closedQty / dbPos.qty) * 100;
+                    const partialPnl = dbPos.side === 'BUY'
+                        ? (parseFloat(realPos.markPrice) - dbPos.entryPrice) * closedQty
+                        : (dbPos.entryPrice - parseFloat(realPos.markPrice)) * closedQty;
+
                     const currentRealized = dbPos.realizedPnl || 0;
 
                     await prisma.position.update({
@@ -206,13 +212,9 @@ export class StrategyEngine {
                         },
                     });
 
-                    const closedQty = dbPos.currentQty - realQty;
-                    const pctClosed = (closedQty / dbPos.qty) * 100;
-                    const partialPnl = dbPos.side === 'BUY'
-                        ? (parseFloat(realPos.markPrice) - dbPos.entryPrice) * closedQty
-                        : (dbPos.entryPrice - parseFloat(realPos.markPrice)) * closedQty;
                     const margin = (closedQty * dbPos.entryPrice) / (env.LEVERAGE || 60);
                     const roiPct = margin > 0 ? (partialPnl / margin) * 100 : 0;
+
 
                     // Log the native partial TP event
                     await prisma.tradeLog.create({
