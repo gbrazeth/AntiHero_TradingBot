@@ -194,9 +194,16 @@ export class StrategyEngine {
                         }
                     }
 
+                    const currentRealized = dbPos.realizedPnl || 0;
+
                     await prisma.position.update({
                         where: { id: dbPos.id },
-                        data: { currentQty: realQty, slPrice: newSlPrice, beApplied: isFirstPartial ? true : dbPos.beApplied },
+                        data: { 
+                            currentQty: realQty, 
+                            slPrice: newSlPrice, 
+                            beApplied: isFirstPartial ? true : dbPos.beApplied,
+                            realizedPnl: currentRealized + partialPnl
+                        },
                     });
 
                     const closedQty = dbPos.currentQty - realQty;

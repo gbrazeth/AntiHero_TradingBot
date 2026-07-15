@@ -148,11 +148,21 @@ export async function statusController(app: FastifyInstance): Promise<void> {
                 (sum, p) => sum + (p.realizedPnl ?? 0), 0
             );
 
-            // Today's PnL from daily_pnl table
-            const today = new Date().toISOString().slice(0, 10);
-            const dailyPnl = await prisma.dailyPnl.findUnique({
-                where: { date: today },
+            // Today's PnL from trade logs
+            const startOfToday = new Date();
+            startOfToday.setUTCHours(0, 0, 0, 0);
+
+            const todaysLogs = await prisma.tradeLog.findMany({
+                where: {
+                    createdAt: {
+                        gte: startOfToday,
+                    },
+                },
+                select: { pnl: true },
             });
+            const todayRealizedPnl = todaysLogs.reduce(
+                (sum, l) => sum + (l.pnl ?? 0), 0
+            );
 
             // Partial profits from current open position's trade logs
             const openPosition = await prisma.position.findFirst({
@@ -176,8 +186,8 @@ export async function statusController(app: FastifyInstance): Promise<void> {
                 status: 'ok',
                 summary: {
                     totalRealizedPnl: parseFloat(totalRealizedPnl.toFixed(4)),
-                    todayRealizedPnl: dailyPnl ? dailyPnl.realizedPnl : 0,
-                    todayUnrealizedPnl: dailyPnl ? dailyPnl.unrealizedPnl : 0,
+                    todayRealizedPnl: parseFloat(todayRealizedPnl.toFixed(4)),
+                    todayUnrealizedPnl: 0, // Not needed
                     partialProfitsTaken: parseFloat(partialProfitsTaken.toFixed(4)),
                 },
             });
