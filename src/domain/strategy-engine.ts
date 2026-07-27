@@ -146,7 +146,7 @@ export class StrategyEngine {
                     },
                 });
 
-                const margin = (dbPos.currentQty * dbPos.entryPrice) / (env.LEVERAGE || 60);
+                const margin = (dbPos.currentQty * dbPos.entryPrice) / (env.LEVERAGE || 20);
                 const roiPct = margin > 0 ? (slHitPnl / margin) * 100 : 0;
 
                 // Log the full close / SL hit event
@@ -170,29 +170,6 @@ export class StrategyEngine {
                         { symbol, posId: dbPos.id, dbQty: dbPos.currentQty, realQty }, 
                         'Sync: Native Partial TP hit detected. Updating DB.'
                     );
-                    
-                    const isFirstPartial = !dbPos.beApplied;
-                    let newSlPrice = dbPos.slPrice;
-
-                    if (isFirstPartial) {
-                        newSlPrice = this.risk.calcBreakEven(dbPos.side as 'LONG'|'SHORT', dbPos.entryPrice);
-                        const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
-                        
-                        try {
-                            await this.exchange.setTradingStop({
-                                symbol: dbPos.symbol,
-                                side: entrySide,
-                                stopLoss: String(newSlPrice),
-                                qty: String(realQty),
-                            });
-                            await this.telegram.notifyBreakEven({
-                                symbol: dbPos.symbol,
-                                newSl: newSlPrice,
-                            });
-                        } catch (err) {
-                            this.logger.warn({ err }, 'Failed to set break-even after native partial');
-                        }
-                    }
 
                     const closedQty = dbPos.currentQty - realQty;
                     const pctClosed = (closedQty / dbPos.qty) * 100;
@@ -202,19 +179,104 @@ export class StrategyEngine {
 
                     const currentRealized = dbPos.realizedPnl || 0;
 
+                    // Check if we've crossed the 20% ROI threshold (first 2 TP levels = 20% of qty closed)
+                    // 20% ROI TP is the 2nd level. When totalClosed >= 20% of original qty, activate conditional SL.
+                    const totalClosed = dbPos.qty - realQty;
+                    const totalClosedPct = totalClosed / dbPos.qty;
+                    const shouldActivateConditionalSl = !dbPos.beApplied && totalClosedPct >= 0.19; // ~20% closed = 2nd TP hit
+
+                    let newSlPrice = dbPos.slPrice;
+
+                    if (shouldActivateConditionalSl) {
+                        // Cancel old SL and place new one at -15% ROI
+                        newSlPrice = this.risk.calcConditionalSl(
+                            dbPos.side as 'LONG' | 'SHORT',
+                            dbPos.entryPrice,
+                            -0.15 // -15% ROI
+                        );
+                        const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
+
+                        try {
+                            // Cancel old STOP_MARKET order first
+                            await this.exchange.cancelAllOpenOrders(dbPos.symbol);
+                            
+                            // Place new SL at -15% ROI
+                            await this.exchange.setTradingStop({
+                                symbol: dbPos.symbol,
+                                side: entrySide,
+                                stopLoss: String(newSlPrice),
+                                qty: String(realQty),
+                            });
+
+                            // Re-place remaining TP orders that haven't been hit yet
+                            const leverage = env.LEVERAGE || 20;
+                            const roiTargets = [
+                                { roi: 0.25, pct: 0.10 },
+                                { roi: 0.33, pct: 0.10 },
+                                { roi: 0.50, pct: 0.10 },
+                                { roi: 0.75, pct: 0.10 },
+                                { roi: 1.00, pct: 0.10 },
+                                { roi: 1.50, pct: 0.05 },
+                                { roi: 2.00, pct: 0.05 },
+                                { roi: 2.50, pct: 0.05 },
+                                { roi: 3.00, pct: 0.05 },
+                                { roi: 4.00, pct: 0.05 },
+                                { roi: 5.00, pct: 0.05 }
+                            ];
+
+                            let remainingQty = realQty;
+                            for (let i = 0; i < roiTargets.length; i++) {
+                                const t = roiTargets[i];
+                                if (!t || remainingQty <= 0.001) break;
+
+                                const priceMovePct = t.roi / leverage;
+                                const tpPrice = dbPos.side === 'BUY'
+                                    ? parseFloat((dbPos.entryPrice * (1 + priceMovePct)).toFixed(2))
+                                    : parseFloat((dbPos.entryPrice * (1 - priceMovePct)).toFixed(2));
+
+                                let tpQty = parseFloat((dbPos.qty * t.pct).toFixed(3));
+                                const minQty = parseFloat((6.0 / dbPos.entryPrice).toFixed(3));
+                                if (tpQty < minQty) tpQty = minQty;
+                                if (tpQty > remainingQty) tpQty = remainingQty;
+
+                                const isLast = (i === roiTargets.length - 1);
+                                const finalQty = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
+
+                                await this.exchange.setTakeProfit({
+                                    symbol: dbPos.symbol,
+                                    side: dbPos.side as 'BUY' | 'SELL',
+                                    tpPrice: String(tpPrice),
+                                    qty: finalQty,
+                                });
+                                remainingQty -= parseFloat(finalQty);
+                            }
+
+                            this.logger.info(
+                                { symbol, newSlPrice, oldSl: dbPos.slPrice },
+                                '⚡ Conditional SL activated: 20% ROI TP hit → SL moved to -15% ROI'
+                            );
+
+                            await this.telegram.notifyBreakEven({
+                                symbol: dbPos.symbol,
+                                newSl: newSlPrice,
+                            });
+                        } catch (err) {
+                            this.logger.warn({ err }, 'Failed to set conditional SL after 20% ROI TP hit');
+                        }
+                    }
+
                     await prisma.position.update({
                         where: { id: dbPos.id },
                         data: { 
                             currentQty: realQty, 
-                            slPrice: newSlPrice, 
-                            beApplied: isFirstPartial ? true : dbPos.beApplied,
+                            slPrice: shouldActivateConditionalSl ? newSlPrice : dbPos.slPrice,
+                            beApplied: shouldActivateConditionalSl ? true : dbPos.beApplied,
                             realizedPnl: currentRealized + partialPnl
                         },
                     });
 
-                    const margin = (closedQty * dbPos.entryPrice) / (env.LEVERAGE || 60);
+                    const margin = (closedQty * dbPos.entryPrice) / (env.LEVERAGE || 20);
                     const roiPct = margin > 0 ? (partialPnl / margin) * 100 : 0;
-
 
                     // Log the native partial TP event
                     await prisma.tradeLog.create({
@@ -227,7 +289,7 @@ export class StrategyEngine {
                             price: parseFloat(realPos.markPrice),
                             pnl: parseFloat(partialPnl.toFixed(4)),
                             roiPct: parseFloat(roiPct.toFixed(2)),
-                            details: `TP hit: ${pctClosed.toFixed(1)}% of position closed${isFirstPartial ? ' + Break-even applied' : ''}`,
+                            details: `TP hit: ${pctClosed.toFixed(1)}% of position closed${shouldActivateConditionalSl ? ' | SL moved to -15% ROI' : ''}`,
                         },
                     });
 
@@ -515,34 +577,6 @@ export class StrategyEngine {
         });
 
         const newQty = parseFloat((position.currentQty - partial.qtyToClose).toFixed(4));
-        const isFirstPartial = !position.beApplied;
-
-        // 5. Apply break-even after first partial
-        let newSlPrice = position.slPrice ?? position.entryPrice;
-        if (isFirstPartial) {
-            newSlPrice = this.risk.calcBreakEven(side, position.entryPrice);
-            const entrySide: 'BUY' | 'SELL' = side === 'LONG' ? 'BUY' : 'SELL';
-            try {
-                await this.exchange.setTradingStop({
-                    symbol: payload.symbol,
-                    side: entrySide,
-                    stopLoss: String(newSlPrice),
-                    qty: String(newQty),
-                });
-            } catch (err) {
-                this.logger.warn({ err }, 'Failed to set break-even stop loss via Binance API');
-            }
-
-            await this.telegram.notifyBreakEven({
-                symbol: payload.symbol,
-                newSl: newSlPrice,
-            });
-
-            this.logger.info(
-                { symbol: payload.symbol, newSlPrice },
-                '⚡ Break-even applied after first partial',
-            );
-        }
 
         // Calculate PNL for this partial transaction
         const closedQty = partial.qtyToClose;
@@ -552,21 +586,19 @@ export class StrategyEngine {
 
         const currentRealized = position.realizedPnl || 0;
 
-        // 6. Update position in DB
+        // 5. Update position in DB (SL stays at initial level — no break-even)
         const positionFullyClosed = newQty <= 0;
         await prisma.position.update({
             where: { id: position.id },
             data: {
                 currentQty: positionFullyClosed ? 0 : newQty,
-                slPrice: newSlPrice,
-                beApplied: true,
                 realizedPnl: currentRealized + pnl,
                 status: positionFullyClosed ? 'closed' : 'open',
             },
         });
 
-        // 6b. Log partial exit event
-        const partialMargin = (partial.qtyToClose * position.entryPrice) / (env.LEVERAGE || 60);
+        // 6. Log partial exit event
+        const partialMargin = (partial.qtyToClose * position.entryPrice) / (env.LEVERAGE || 20);
         const partialRoi = partialMargin > 0 ? (pnl / partialMargin) * 100 : 0;
         await prisma.tradeLog.create({
             data: {
@@ -578,7 +610,7 @@ export class StrategyEngine {
                 price: payload.price,
                 pnl: parseFloat(pnl.toFixed(4)),
                 roiPct: parseFloat(partialRoi.toFixed(2)),
-                details: `${(pct * 100).toFixed(0)}% partial exit via webhook${isFirstPartial ? ' + Break-even applied' : ''}`,
+                details: `${(pct * 100).toFixed(0)}% partial exit via webhook (SL kept at initial level)`,
             },
         });
 
@@ -597,7 +629,6 @@ export class StrategyEngine {
                 pct: pct * 100,
                 qtyToClose,
                 newQty,
-                beApplied: isFirstPartial,
                 exchangeOrderId,
             },
             `✅ Partial exit ${pct * 100}% executed`,

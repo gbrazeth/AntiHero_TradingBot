@@ -80,14 +80,15 @@ export class RiskManager {
         // 4. Calculate SL price & TP prices
         const slPrice = this.calcSl(params.side, params.entryPrice);
         
-        // New strategy:
-        // 10% slice at ROIs: 5%, 10%, 15%, 20%, 50%, 75%, 100%
+        // Updated strategy (v3 — 27/07/2026):
+        // 10% slice at ROIs: 10%, 20%, 25%, 33%, 50%, 75%, 100%
         // 5% slice at ROIs: 150%, 200%, 250%, 300%, 400%, 500%
+        // When ROI 20% TP is hit → activate SL at ROI -15%
         const roiTargets = [
-            { roi: 0.05, pct: 0.10 },
             { roi: 0.10, pct: 0.10 },
-            { roi: 0.15, pct: 0.10 },
             { roi: 0.20, pct: 0.10 },
+            { roi: 0.25, pct: 0.10 },
+            { roi: 0.33, pct: 0.10 },
             { roi: 0.50, pct: 0.10 },
             { roi: 0.75, pct: 0.10 },
             { roi: 1.00, pct: 0.10 },
@@ -99,10 +100,7 @@ export class RiskManager {
             { roi: 5.00, pct: 0.05 }
         ];
         
-        // Leverage assumption for ROI math. If using cross margin or different leverage,
-        // this needs to match what is set on Binance. Default is 20x or 60x.
-        // I will use 60 as per recent testing, but if env.LEVERAGE exists we should use it.
-        const leverage = env.LEVERAGE || 60;
+        const leverage = env.LEVERAGE || 20;
         
         const tps = roiTargets.map(t => {
             const priceMovePct = t.roi / leverage;
@@ -146,15 +144,22 @@ export class RiskManager {
     }
 
     /**
-     * Calculates the break-even SL price.
-     * For LONG: entry + BE_BUFFER
-     * For SHORT: entry - BE_BUFFER
+     * Calculates a conditional SL price based on a target ROI%.
+     * Used when a TP level is hit and we want to move the SL to protect profits.
+     * For example: when 20% ROI TP hits, move SL to -15% ROI level.
+     * 
+     * @param side - LONG or SHORT
+     * @param entryPrice - Original entry price
+     * @param targetRoi - Target ROI as decimal (e.g. -0.15 for -15% ROI)
+     * @returns The new stop loss price
      */
-    calcBreakEven(side: 'LONG' | 'SHORT', entryPrice: number): number {
-        const buffer = entryPrice * env.BE_BUFFER;
+    calcConditionalSl(side: 'LONG' | 'SHORT', entryPrice: number, targetRoi: number): number {
+        const leverage = env.LEVERAGE || 20;
+        const priceMovePct = targetRoi / leverage;
+        const delta = entryPrice * priceMovePct;
         return side === 'LONG'
-            ? parseFloat((entryPrice + buffer).toFixed(2))
-            : parseFloat((entryPrice - buffer).toFixed(2));
+            ? parseFloat((entryPrice + delta).toFixed(2))
+            : parseFloat((entryPrice - delta).toFixed(2));
     }
 
     /**
