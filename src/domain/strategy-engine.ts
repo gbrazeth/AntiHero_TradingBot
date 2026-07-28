@@ -188,7 +188,7 @@ export class StrategyEngine {
                     let newSlPrice = dbPos.slPrice;
 
                     if (shouldActivateConditionalSl) {
-                        // Cancel old SL and place new one at -15% ROI
+                        // Calculate new SL at -15% ROI
                         newSlPrice = this.risk.calcConditionalSl(
                             dbPos.side as 'LONG' | 'SHORT',
                             dbPos.entryPrice,
@@ -197,59 +197,17 @@ export class StrategyEngine {
                         const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
 
                         try {
-                            // Cancel old STOP_MARKET order first
+                            // FAIL-SAFE: Cancel old orders and place new SL + TPs
+                            // Step 1: Cancel all existing orders (old SL + old TPs)
                             await this.exchange.cancelAllOpenOrders(dbPos.symbol);
                             
-                            // Place new SL at -15% ROI
+                            // Step 2: Immediately place new SL — this is the CRITICAL order
                             await this.exchange.setTradingStop({
                                 symbol: dbPos.symbol,
                                 side: entrySide,
                                 stopLoss: String(newSlPrice),
                                 qty: String(realQty),
                             });
-
-                            // Re-place remaining TP orders that haven't been hit yet
-                            const leverage = env.LEVERAGE || 20;
-                            const roiTargets = [
-                                { roi: 0.25, pct: 0.10 },
-                                { roi: 0.33, pct: 0.10 },
-                                { roi: 0.50, pct: 0.10 },
-                                { roi: 0.75, pct: 0.10 },
-                                { roi: 1.00, pct: 0.10 },
-                                { roi: 1.50, pct: 0.05 },
-                                { roi: 2.00, pct: 0.05 },
-                                { roi: 2.50, pct: 0.05 },
-                                { roi: 3.00, pct: 0.05 },
-                                { roi: 4.00, pct: 0.05 },
-                                { roi: 5.00, pct: 0.05 }
-                            ];
-
-                            let remainingQty = realQty;
-                            for (let i = 0; i < roiTargets.length; i++) {
-                                const t = roiTargets[i];
-                                if (!t || remainingQty <= 0.001) break;
-
-                                const priceMovePct = t.roi / leverage;
-                                const tpPrice = dbPos.side === 'BUY'
-                                    ? parseFloat((dbPos.entryPrice * (1 + priceMovePct)).toFixed(2))
-                                    : parseFloat((dbPos.entryPrice * (1 - priceMovePct)).toFixed(2));
-
-                                let tpQty = parseFloat((dbPos.qty * t.pct).toFixed(3));
-                                const minQty = parseFloat((6.0 / dbPos.entryPrice).toFixed(3));
-                                if (tpQty < minQty) tpQty = minQty;
-                                if (tpQty > remainingQty) tpQty = remainingQty;
-
-                                const isLast = (i === roiTargets.length - 1);
-                                const finalQty = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
-
-                                await this.exchange.setTakeProfit({
-                                    symbol: dbPos.symbol,
-                                    side: dbPos.side as 'BUY' | 'SELL',
-                                    tpPrice: String(tpPrice),
-                                    qty: finalQty,
-                                });
-                                remainingQty -= parseFloat(finalQty);
-                            }
 
                             this.logger.info(
                                 { symbol, newSlPrice, oldSl: dbPos.slPrice },
@@ -260,8 +218,74 @@ export class StrategyEngine {
                                 symbol: dbPos.symbol,
                                 newSl: newSlPrice,
                             });
+
+                            // Step 3: Re-place remaining TP orders (non-critical, if these fail we still have the SL)
+                            try {
+                                const leverage = env.LEVERAGE || 20;
+                                const roiTargets = [
+                                    { roi: 0.25, pct: 0.10 },
+                                    { roi: 0.33, pct: 0.10 },
+                                    { roi: 0.50, pct: 0.10 },
+                                    { roi: 0.75, pct: 0.10 },
+                                    { roi: 1.00, pct: 0.10 },
+                                    { roi: 1.50, pct: 0.05 },
+                                    { roi: 2.00, pct: 0.05 },
+                                    { roi: 2.50, pct: 0.05 },
+                                    { roi: 3.00, pct: 0.05 },
+                                    { roi: 4.00, pct: 0.05 },
+                                    { roi: 5.00, pct: 0.05 }
+                                ];
+
+                                let remainingQty = realQty;
+                                for (let i = 0; i < roiTargets.length; i++) {
+                                    const t = roiTargets[i];
+                                    if (!t || remainingQty <= 0.001) break;
+
+                                    const priceMovePct = t.roi / leverage;
+                                    const tpPrice = dbPos.side === 'BUY'
+                                        ? parseFloat((dbPos.entryPrice * (1 + priceMovePct)).toFixed(2))
+                                        : parseFloat((dbPos.entryPrice * (1 - priceMovePct)).toFixed(2));
+
+                                    let tpQty = parseFloat((dbPos.qty * t.pct).toFixed(3));
+                                    const minQty = parseFloat((6.0 / dbPos.entryPrice).toFixed(3));
+                                    if (tpQty < minQty) tpQty = minQty;
+                                    if (tpQty > remainingQty) tpQty = remainingQty;
+
+                                    const isLast = (i === roiTargets.length - 1);
+                                    const finalQty = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
+
+                                    await this.exchange.setTakeProfit({
+                                        symbol: dbPos.symbol,
+                                        side: dbPos.side as 'BUY' | 'SELL',
+                                        tpPrice: String(tpPrice),
+                                        qty: finalQty,
+                                    });
+                                    remainingQty -= parseFloat(finalQty);
+                                }
+                            } catch (tpErr) {
+                                this.logger.warn({ tpErr }, 'Failed to re-place TPs after conditional SL (SL is still active)');
+                            }
                         } catch (err) {
-                            this.logger.warn({ err }, 'Failed to set conditional SL after 20% ROI TP hit');
+                            // CRITICAL: SL placement failed — try to restore original SL
+                            this.logger.error({ err }, '🚨 CRITICAL: Failed to set conditional SL! Attempting to restore original SL.');
+                            newSlPrice = dbPos.slPrice ?? dbPos.entryPrice; // Keep original
+                            
+                            try {
+                                // Try to place back the original SL
+                                await this.exchange.setTradingStop({
+                                    symbol: dbPos.symbol,
+                                    side: entrySide,
+                                    stopLoss: String(dbPos.slPrice),
+                                    qty: String(realQty),
+                                });
+                                this.logger.info('Original SL restored successfully');
+                            } catch (restoreErr) {
+                                this.logger.error({ restoreErr }, '🚨🚨 CRITICAL: Could not restore original SL! Position is UNPROTECTED!');
+                                await this.telegram.notifyError(
+                                    'STOP LOSS FAILURE',
+                                    new Error(`URGENTE: Posição ${dbPos.symbol} está SEM STOP LOSS! Verifique manualmente na Binance AGORA!`)
+                                );
+                            }
                         }
                     }
 
@@ -454,7 +478,11 @@ export class StrategyEngine {
                 qty: String(risk.qty),
             });
         } catch (err) {
-            this.logger.warn({ err }, 'Failed to set initial stop loss');
+            this.logger.error({ err }, '🚨 CRITICAL: Failed to set initial stop loss!');
+            await this.telegram.notifyError(
+                'STOP LOSS FAILURE',
+                new Error(`URGENTE: Posição ${payload.symbol} ${side} aberta SEM STOP LOSS! SL deveria ser ${risk.slPrice}. Verifique manualmente na Binance AGORA!`)
+            );
         }
 
         // 8. Set Take Profits natively (13 levels based on ROI)
