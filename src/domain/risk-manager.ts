@@ -40,7 +40,45 @@ export class RiskManager {
     constructor(private readonly logger: FastifyBaseLogger) { }
 
     /**
+     * Returns the TP and SL rules for a given scenario.
+     */
+    getScenarioRules(scenario: 'SCENARIO_1' | 'SCENARIO_2') {
+        if (scenario === 'SCENARIO_1') {
+            return [
+                { tpRoi: 0.25, closePct: 0.10, slAction: 'MOVE_TO_ROI', slRoi: 0.00 }, // Break-even
+                { tpRoi: 0.33, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.50, closePct: 0.30, slAction: 'MOVE_TO_ROI', slRoi: 0.10 },
+                { tpRoi: 0.75, closePct: 0.30, slAction: 'MOVE_TO_ROI', slRoi: 0.25, activateTrailing: true },
+            ];
+        } else {
+            return [
+                { tpRoi: 0.10, closePct: 0.20, slAction: 'NONE' },
+                { tpRoi: 0.20, closePct: 0.20, slAction: 'MOVE_TO_ROI', slRoi: -0.10 },
+                { tpRoi: 0.33, closePct: 0.10, slAction: 'MOVE_TO_ROI', slRoi: 0.00 }, // Break-even
+                { tpRoi: 0.50, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.75, closePct: 0.20, slAction: 'MOVE_TO_ROI', slRoi: 0.25, activateTrailing: true },
+            ];
+        }
+    }
+
+    /**
+     * Helper to calculate TP prices for a set of rules.
+     */
+    calcTpsForRules(side: 'LONG' | 'SHORT', entryPrice: number, rules: ReturnType<typeof this.getScenarioRules>) {
+        const leverage = env.LEVERAGE || 20;
+        return rules.map(r => {
+            const priceMovePct = r.tpRoi / leverage;
+            return {
+                price: this.calcTp(side, entryPrice, priceMovePct),
+                pct: r.closePct,
+                roi: r.tpRoi,
+            };
+        });
+    }
+
+    /**
      * Evaluates whether a new trade is allowed and returns sizing + SL.
+     * By default, a new trade starts in SCENARIO_1.
      */
     async checkEntry(params: RiskParams): Promise<RiskResult> {
         // 1. Kill switch — check daily drawdown
@@ -77,38 +115,11 @@ export class RiskManager {
         // 3. Calculate qty (fixed_usdt mode)
         const qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
 
-        // 4. Calculate SL price & TP prices
+        // 4. Calculate SL price & TP prices (Starting in SCENARIO_1)
         const slPrice = this.calcSl(params.side, params.entryPrice);
         
-        // Updated strategy (v3 — 27/07/2026):
-        // 10% slice at ROIs: 10%, 20%, 25%, 33%, 50%, 75%, 100%
-        // 5% slice at ROIs: 150%, 200%, 250%, 300%, 400%, 500%
-        // When ROI 20% TP is hit → activate SL at ROI -15%
-        const roiTargets = [
-            { roi: 0.10, pct: 0.10 },
-            { roi: 0.20, pct: 0.10 },
-            { roi: 0.25, pct: 0.10 },
-            { roi: 0.33, pct: 0.10 },
-            { roi: 0.50, pct: 0.10 },
-            { roi: 0.75, pct: 0.10 },
-            { roi: 1.00, pct: 0.10 },
-            { roi: 1.50, pct: 0.05 },
-            { roi: 2.00, pct: 0.05 },
-            { roi: 2.50, pct: 0.05 },
-            { roi: 3.00, pct: 0.05 },
-            { roi: 4.00, pct: 0.05 },
-            { roi: 5.00, pct: 0.05 }
-        ];
-        
-        const leverage = env.LEVERAGE || 20;
-        
-        const tps = roiTargets.map(t => {
-            const priceMovePct = t.roi / leverage;
-            return {
-                price: this.calcTp(params.side, params.entryPrice, priceMovePct),
-                pct: t.pct
-            };
-        });
+        const rules = this.getScenarioRules('SCENARIO_1');
+        const tps = this.calcTpsForRules(params.side, params.entryPrice, rules);
 
         this.logger.info(
             { symbol: params.symbol, side: params.side, qty, slPrice, tps },

@@ -183,6 +183,34 @@ export class BinanceAdapter {
         this.logger.info({ symbol: params.symbol, tpPrice: params.tpPrice }, 'Take profit target set');
     }
 
+    async setTrailingStop(params: {
+        symbol: string;
+        side: 'BUY' | 'SELL';
+        qty: string;
+        activationPrice: string;
+        callbackRate: string; // e.g. "2.5" for 2.5%
+    }): Promise<void> {
+        if (env.MOCK_EXCHANGE) {
+            this.logger.info({ params, mode: 'MOCK' }, 'MOCK: Setting trailing stop');
+            return;
+        }
+
+        const tpSide = params.side === 'BUY' ? 'SELL' : 'BUY';
+
+        const qsParams = new URLSearchParams({
+            symbol: params.symbol,
+            side: tpSide,
+            type: 'TRAILING_STOP_MARKET',
+            reduceOnly: 'true',
+            quantity: params.qty,
+            activationPrice: params.activationPrice,
+            callbackRate: params.callbackRate,
+        });
+
+        await this.post('/fapi/v1/order', qsParams.toString());
+        this.logger.info({ symbol: params.symbol, activationPrice: params.activationPrice, callbackRate: params.callbackRate }, 'Trailing stop set');
+    }
+
     async cancelAllOpenOrders(symbol: string): Promise<void> {
         if (env.MOCK_EXCHANGE) {
             this.logger.info({ symbol, mode: 'MOCK' }, 'MOCK: Cancelling all open orders');

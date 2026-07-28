@@ -46,18 +46,22 @@ model Order {
 }
 
 model Position {
-  id         Int      @id @default(autoincrement())
-  symbol     String
-  side       String
-  entryPrice Float    @map("entry_price")
-  qty        Float
-  currentQty Float    @map("current_qty")
-  slPrice    Float?   @map("sl_price")
-  beApplied  Boolean  @default(false) @map("be_applied")
-  realizedPnl Float?   @map("realized_pnl")
-  status     String   @default("open")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  symbol          String
+  side            String
+  entryPrice      Float    @map("entry_price")
+  qty             Float
+  currentQty      Float    @map("current_qty")
+  slPrice         Float?   @map("sl_price")
+  beApplied       Boolean  @default(false) @map("be_applied")
+  realizedPnl     Float?   @map("realized_pnl")
+  status          String   @default("open")
+  scenario        String   @default("SCENARIO_1") // SCENARIO_1 or SCENARIO_2
+  trailingActive  Boolean  @default(false) @map("trailing_active")
+  trailingSlPrice Float?   @map("trailing_sl_price")
+  maxRoiReached   Float    @default(0) @map("max_roi_reached")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("positions")
 }

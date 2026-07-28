@@ -102,6 +102,11 @@ export class StrategyEngine {
                     await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.33 });
                     break;
 
+                case 'SMA9_CROSS_ABOVE':
+                case 'SMA9_CROSS_BELOW':
+                    await this.handleSma9Cross({ payload, signalId });
+                    break;
+
                 default:
                     this.logger.warn({ event: payload.event }, 'Unknown event — skipping');
             }
@@ -109,6 +114,141 @@ export class StrategyEngine {
             this.logger.error({ err, event: payload.event }, 'StrategyEngine error');
             await this.telegram.notifyError(`StrategyEngine.${payload.event}`, err);
             throw err;
+        }
+    }
+
+    private async handleSma9Cross(params: { payload: WebhookPayload; signalId: number }): Promise<void> {
+        const { payload } = params;
+        
+        // Find open position for this symbol
+        const position = await prisma.position.findFirst({
+            where: { symbol: payload.symbol, status: 'open' },
+        });
+
+        if (!position) {
+            this.logger.info({ symbol: payload.symbol }, 'No open position found for SMA9 cross');
+            return;
+        }
+
+        let newScenario: 'SCENARIO_1' | 'SCENARIO_2' | null = null;
+
+        if (payload.event === 'SMA9_CROSS_BELOW') {
+            newScenario = position.side === 'BUY' ? 'SCENARIO_2' : 'SCENARIO_1';
+        } else if (payload.event === 'SMA9_CROSS_ABOVE') {
+            newScenario = position.side === 'SELL' ? 'SCENARIO_2' : 'SCENARIO_1';
+        }
+
+        if (!newScenario || newScenario === position.scenario) {
+            this.logger.info({ symbol: payload.symbol, newScenario }, 'Scenario unchanged or invalid');
+            return;
+        }
+
+        this.logger.info({ symbol: payload.symbol, oldScenario: position.scenario, newScenario }, '⚡ Scenario changed due to SMA9 cross');
+
+        // Update DB
+        await prisma.position.update({
+            where: { id: position.id },
+            data: { scenario: newScenario },
+        });
+
+        const entrySide = position.side as 'BUY' | 'SELL';
+        const rules = this.risk.getScenarioRules(newScenario);
+
+        // Determine what TPs are still pending based on maxRoiReached
+        // and what the current SL should be
+        let targetSlAction = 'NONE';
+        let targetSlRoi = 0;
+        let trailingShouldBeActive = false;
+
+        const pendingTps = [];
+
+        for (const rule of rules) {
+            if (position.maxRoiReached >= rule.tpRoi) {
+                // This rule's ROI was already reached. Adopt its SL action.
+                if (rule.slAction === 'MOVE_TO_ROI') {
+                    targetSlAction = 'MOVE_TO_ROI';
+                    targetSlRoi = rule.slRoi ?? 0;
+                }
+                if (rule.activateTrailing) {
+                    trailingShouldBeActive = true;
+                }
+            } else {
+                // This rule's ROI has NOT been reached. Add it to pending TPs.
+                pendingTps.push(rule);
+            }
+        }
+
+        // Calculate new SL based on the adopted rule
+        let newSlPrice = position.slPrice || position.entryPrice;
+        if (targetSlAction === 'MOVE_TO_ROI') {
+            newSlPrice = this.risk.calcConditionalSl(entrySide === 'BUY' ? 'LONG' : 'SHORT', position.entryPrice, targetSlRoi);
+        }
+
+        try {
+            // Cancel all orders (SL + old TPs)
+            await this.exchange.cancelAllOpenOrders(position.symbol);
+
+            // Re-place SL immediately
+            await this.exchange.setTradingStop({
+                symbol: position.symbol,
+                side: entrySide,
+                stopLoss: String(newSlPrice),
+                qty: String(position.currentQty),
+            });
+
+            // Re-place pending TPs
+            let remainingQty = position.currentQty;
+            const tps = this.risk.calcTpsForRules(entrySide === 'BUY' ? 'LONG' : 'SHORT', position.entryPrice, pendingTps);
+
+            for (const tp of tps) {
+                if (remainingQty <= 0.001) break;
+                
+                let tpQty = parseFloat((position.qty * tp.pct).toFixed(3));
+                const minQty = parseFloat((6.0 / position.entryPrice).toFixed(3));
+                if (tpQty < minQty) tpQty = minQty;
+                if (tpQty > remainingQty) tpQty = remainingQty;
+
+                await this.exchange.setTakeProfit({
+                    symbol: position.symbol,
+                    side: entrySide,
+                    tpPrice: String(tp.price),
+                    qty: tpQty.toFixed(3),
+                });
+                remainingQty -= parseFloat(tpQty.toFixed(3));
+            }
+
+            // If trailing should be active but wasn't (e.g. we switched to a scenario where it's already active)
+            if (trailingShouldBeActive && !position.trailingActive) {
+                if (remainingQty > 0.001) {
+                    const callbackRate = "2.5"; // 50% ROI / 20x = 2.5%
+                    const markPrice = (await this.exchange.getPosition(position.symbol))?.markPrice || String(position.entryPrice);
+                    await this.exchange.setTrailingStop({
+                        symbol: position.symbol,
+                        side: entrySide,
+                        qty: String(remainingQty),
+                        activationPrice: markPrice,
+                        callbackRate
+                    });
+                    
+                    await prisma.position.update({
+                        where: { id: position.id },
+                        data: { trailingActive: true },
+                    });
+                }
+            }
+
+            // Notify Telegram
+            await this.telegram.notifyBreakEven({
+                symbol: position.symbol,
+                newSl: newSlPrice,
+            });
+
+        } catch (err) {
+            this.logger.error({ err, symbol: position.symbol }, '🚨 Failed to re-arm orders during scenario switch');
+            await this.telegram.notifyError(
+                'SCENARIO SWITCH FAILURE',
+                new Error(`Falha ao rearmar ordens para ${position.symbol} na mudança de cenário. Verifique a Binance manualmente.`)
+            );
         }
     }
 
@@ -179,29 +319,53 @@ export class StrategyEngine {
 
                     const currentRealized = dbPos.realizedPnl || 0;
 
-                    // Check if we've crossed the 20% ROI threshold (first 2 TP levels = 20% of qty closed)
-                    // 20% ROI TP is the 2nd level. When totalClosed >= 20% of original qty, activate conditional SL.
+                    // Determine which rules were hit based on totalClosedPct
                     const totalClosed = dbPos.qty - realQty;
                     const totalClosedPct = totalClosed / dbPos.qty;
-                    const shouldActivateConditionalSl = !dbPos.beApplied && totalClosedPct >= 0.19; // ~20% closed = 2nd TP hit
+                    
+                    const rules = this.risk.getScenarioRules(dbPos.scenario as 'SCENARIO_1' | 'SCENARIO_2');
+                    let cumPct = 0;
+                    let targetSlAction = 'NONE';
+                    let targetSlRoi = 0;
+                    let activateTrailing = false;
+                    let maxRoiReached = dbPos.maxRoiReached;
+
+                    for (const rule of rules) {
+                        cumPct += rule.closePct;
+                        if (totalClosedPct + 0.001 >= cumPct) { // +0.001 for float precision
+                            maxRoiReached = Math.max(maxRoiReached, rule.tpRoi);
+                            if (rule.slAction === 'MOVE_TO_ROI') {
+                                targetSlAction = 'MOVE_TO_ROI';
+                                targetSlRoi = rule.slRoi ?? 0;
+                            }
+                            if (rule.activateTrailing) {
+                                activateTrailing = true;
+                            }
+                        }
+                    }
 
                     let newSlPrice = dbPos.slPrice;
+                    let slChanged = false;
 
-                    if (shouldActivateConditionalSl) {
-                        // Calculate new SL at -15% ROI
-                        newSlPrice = this.risk.calcConditionalSl(
+                    if (targetSlAction === 'MOVE_TO_ROI') {
+                        const calculatedSl = this.risk.calcConditionalSl(
                             dbPos.side as 'LONG' | 'SHORT',
                             dbPos.entryPrice,
-                            -0.15 // -15% ROI
+                            targetSlRoi
                         );
-                        const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
+                        if (calculatedSl !== dbPos.slPrice) {
+                            newSlPrice = calculatedSl;
+                            slChanged = true;
+                        }
+                    }
 
+                    if (slChanged) {
+                        const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
                         try {
-                            // FAIL-SAFE: Cancel old orders and place new SL + TPs
-                            // Step 1: Cancel all existing orders (old SL + old TPs)
+                            // Cancel all existing orders (old SL + old TPs)
                             await this.exchange.cancelAllOpenOrders(dbPos.symbol);
                             
-                            // Step 2: Immediately place new SL — this is the CRITICAL order
+                            // Immediately place new SL
                             await this.exchange.setTradingStop({
                                 symbol: dbPos.symbol,
                                 side: entrySide,
@@ -210,75 +374,49 @@ export class StrategyEngine {
                             });
 
                             this.logger.info(
-                                { symbol, newSlPrice, oldSl: dbPos.slPrice },
-                                '⚡ Conditional SL activated: 20% ROI TP hit → SL moved to -15% ROI'
+                                { symbol, newSlPrice, oldSl: dbPos.slPrice, targetSlRoi },
+                                '⚡ SL moved dynamically based on TP hit'
                             );
 
                             await this.telegram.notifyBreakEven({
                                 symbol: dbPos.symbol,
-                                newSl: newSlPrice,
+                                newSl: newSlPrice as number,
                             });
 
-                            // Step 3: Re-place remaining TP orders (non-critical, if these fail we still have the SL)
+                            // Re-place remaining TP orders
                             try {
-                                const leverage = env.LEVERAGE || 20;
-                                const roiTargets = [
-                                    { roi: 0.25, pct: 0.10 },
-                                    { roi: 0.33, pct: 0.10 },
-                                    { roi: 0.50, pct: 0.10 },
-                                    { roi: 0.75, pct: 0.10 },
-                                    { roi: 1.00, pct: 0.10 },
-                                    { roi: 1.50, pct: 0.05 },
-                                    { roi: 2.00, pct: 0.05 },
-                                    { roi: 2.50, pct: 0.05 },
-                                    { roi: 3.00, pct: 0.05 },
-                                    { roi: 4.00, pct: 0.05 },
-                                    { roi: 5.00, pct: 0.05 }
-                                ];
-
                                 let remainingQty = realQty;
-                                for (let i = 0; i < roiTargets.length; i++) {
-                                    const t = roiTargets[i];
-                                    if (!t || remainingQty <= 0.001) break;
+                                const pendingRules = rules.filter(r => r.tpRoi > maxRoiReached);
+                                const tps = this.risk.calcTpsForRules(entrySide === 'BUY' ? 'LONG' : 'SHORT', dbPos.entryPrice, pendingRules);
 
-                                    const priceMovePct = t.roi / leverage;
-                                    const tpPrice = dbPos.side === 'BUY'
-                                        ? parseFloat((dbPos.entryPrice * (1 + priceMovePct)).toFixed(2))
-                                        : parseFloat((dbPos.entryPrice * (1 - priceMovePct)).toFixed(2));
-
-                                    let tpQty = parseFloat((dbPos.qty * t.pct).toFixed(3));
+                                for (const tp of tps) {
+                                    if (remainingQty <= 0.001) break;
+                                    let tpQty = parseFloat((dbPos.qty * tp.pct).toFixed(3));
                                     const minQty = parseFloat((6.0 / dbPos.entryPrice).toFixed(3));
                                     if (tpQty < minQty) tpQty = minQty;
                                     if (tpQty > remainingQty) tpQty = remainingQty;
 
-                                    const isLast = (i === roiTargets.length - 1);
-                                    const finalQty = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
-
                                     await this.exchange.setTakeProfit({
                                         symbol: dbPos.symbol,
-                                        side: dbPos.side as 'BUY' | 'SELL',
-                                        tpPrice: String(tpPrice),
-                                        qty: finalQty,
+                                        side: entrySide,
+                                        tpPrice: String(tp.price),
+                                        qty: tpQty.toFixed(3),
                                     });
-                                    remainingQty -= parseFloat(finalQty);
+                                    remainingQty -= parseFloat(tpQty.toFixed(3));
                                 }
                             } catch (tpErr) {
-                                this.logger.warn({ tpErr }, 'Failed to re-place TPs after conditional SL (SL is still active)');
+                                this.logger.warn({ tpErr }, 'Failed to re-place TPs after dynamic SL move (SL is still active)');
                             }
                         } catch (err) {
-                            // CRITICAL: SL placement failed — try to restore original SL
-                            this.logger.error({ err }, '🚨 CRITICAL: Failed to set conditional SL! Attempting to restore original SL.');
-                            newSlPrice = dbPos.slPrice ?? dbPos.entryPrice; // Keep original
-                            
+                            this.logger.error({ err }, '🚨 CRITICAL: Failed to set dynamic SL! Attempting to restore original SL.');
+                            newSlPrice = dbPos.slPrice ?? dbPos.entryPrice;
                             try {
-                                // Try to place back the original SL
                                 await this.exchange.setTradingStop({
                                     symbol: dbPos.symbol,
                                     side: entrySide,
                                     stopLoss: String(dbPos.slPrice),
                                     qty: String(realQty),
                                 });
-                                this.logger.info('Original SL restored successfully');
                             } catch (restoreErr) {
                                 this.logger.error({ restoreErr }, '🚨🚨 CRITICAL: Could not restore original SL! Position is UNPROTECTED!');
                                 await this.telegram.notifyError(
@@ -289,12 +427,38 @@ export class StrategyEngine {
                         }
                     }
 
+                    // Handle Trailing Stop Activation
+                    let trailingActive = dbPos.trailingActive;
+                    if (activateTrailing && !trailingActive) {
+                        try {
+                            const entrySide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
+                            const callbackRate = "2.5"; // 50% ROI / 20x
+                            const markPrice = realPos.markPrice;
+                            
+                            // Cancel all open orders first to remove standard SL
+                            await this.exchange.cancelAllOpenOrders(dbPos.symbol);
+                            
+                            await this.exchange.setTrailingStop({
+                                symbol: dbPos.symbol,
+                                side: entrySide,
+                                qty: String(realQty),
+                                activationPrice: markPrice,
+                                callbackRate
+                            });
+                            trailingActive = true;
+                            this.logger.info({ symbol }, '⚡ Native Trailing Stop activated on Binance');
+                        } catch (err) {
+                            this.logger.error({ err }, 'Failed to activate trailing stop');
+                        }
+                    }
+
                     await prisma.position.update({
                         where: { id: dbPos.id },
                         data: { 
                             currentQty: realQty, 
-                            slPrice: shouldActivateConditionalSl ? newSlPrice : dbPos.slPrice,
-                            beApplied: shouldActivateConditionalSl ? true : dbPos.beApplied,
+                            slPrice: newSlPrice,
+                            maxRoiReached,
+                            trailingActive,
                             realizedPnl: currentRealized + partialPnl
                         },
                     });
@@ -313,7 +477,7 @@ export class StrategyEngine {
                             price: parseFloat(realPos.markPrice),
                             pnl: parseFloat(partialPnl.toFixed(4)),
                             roiPct: parseFloat(roiPct.toFixed(2)),
-                            details: `TP hit: ${pctClosed.toFixed(1)}% of position closed${shouldActivateConditionalSl ? ' | SL moved to -15% ROI' : ''}`,
+                            details: `TP hit: ${pctClosed.toFixed(1)}% of position closed${slChanged ? ` | SL moved to ${targetSlRoi}% ROI` : ''}`,
                         },
                     });
 
@@ -488,12 +652,10 @@ export class StrategyEngine {
         // 8. Set Take Profits natively (13 levels based on ROI)
         try {
             const tps = risk.tps;
-            let remainingQty = risk.qty;
             
             for (let i = 0; i < tps.length; i++) {
                 const tp = tps[i];
                 if (!tp) continue;
-                if (remainingQty <= 0.001) break; // Float precision safeguard
                 
                 let tpQty = parseFloat((risk.qty * tp.pct).toFixed(3));
                 
@@ -502,24 +664,13 @@ export class StrategyEngine {
                 if (tpQty < minQty) {
                     tpQty = minQty;
                 }
-                
-                // Don't exceed remaining
-                if (tpQty > remainingQty) {
-                    tpQty = remainingQty;
-                }
-                
-                // For the very last TP, we use whatever is remaining to prevent dusting
-                const isLast = (i === tps.length - 1);
-                const finalQtyStr = isLast ? remainingQty.toFixed(3) : tpQty.toFixed(3);
 
                 await this.exchange.setTakeProfit({
                     symbol: payload.symbol,
                     side: exchangeSide,
                     tpPrice: String(tp.price),
-                    qty: finalQtyStr,
+                    qty: tpQty.toFixed(3),
                 });
-                
-                remainingQty -= parseFloat(finalQtyStr);
             }
         } catch (err) {
             this.logger.warn({ err }, 'Failed to set take profit limit orders');
