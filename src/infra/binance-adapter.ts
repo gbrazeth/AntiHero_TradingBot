@@ -150,10 +150,6 @@ export class BinanceAdapter {
         });
 
         await this.post('/fapi/v1/algoOrder', qsParams.toString());
-
-        // It might be necessary to cancel existing SL orders first using logic here, 
-        // but for now we follow the adapter pattern.
-        await this.post('/fapi/v1/order', qsParams.toString());
         this.logger.info({ symbol: params.symbol, stopLoss: params.stopLoss }, 'Trading stop set');
     }
 

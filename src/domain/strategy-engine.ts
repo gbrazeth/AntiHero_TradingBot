@@ -484,7 +484,7 @@ export class StrategyEngine {
                     await this.telegram.notifyPartialExit({
                         symbol: dbPos.symbol,
                         pct: parseFloat(pctClosed.toFixed(2)),
-                        price: dbPos.entryPrice,
+                        price: parseFloat(realPos.markPrice),
                         closedQty: String(closedQty.toFixed(3)),
                         event: 'NATIVE_PARTIAL_HIT'
                     });

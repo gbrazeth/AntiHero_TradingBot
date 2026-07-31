@@ -42,21 +42,40 @@ export class RiskManager {
     /**
      * Returns the TP and SL rules for a given scenario.
      */
-    getScenarioRules(scenario: 'SCENARIO_1' | 'SCENARIO_2') {
+    getScenarioRules(scenario: 'SCENARIO_1' | 'SCENARIO_2'): Array<{ tpRoi: number; closePct: number; slAction: string; slRoi?: number; activateTrailing?: boolean }> {
         if (scenario === 'SCENARIO_1') {
             return [
-                { tpRoi: 0.25, closePct: 0.10, slAction: 'MOVE_TO_ROI', slRoi: 0.00 }, // Break-even
+                { tpRoi: 0.10, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.20, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.25, closePct: 0.10, slAction: 'NONE' },
                 { tpRoi: 0.33, closePct: 0.10, slAction: 'NONE' },
-                { tpRoi: 0.50, closePct: 0.30, slAction: 'MOVE_TO_ROI', slRoi: 0.10 },
-                { tpRoi: 0.75, closePct: 0.30, slAction: 'MOVE_TO_ROI', slRoi: 0.25, activateTrailing: true },
+                { tpRoi: 0.50, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.75, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 1.00, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 1.50, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 2.00, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 2.50, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 3.00, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 4.00, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 5.00, closePct: 0.05, slAction: 'NONE' },
             ];
         } else {
+            // Scenario 2 is for trend reversals, we apply the same safety pattern or original? 
+            // The user said "Vamos manter apenas o stop loss inicial da operação... caso mude a tendência."
             return [
-                { tpRoi: 0.10, closePct: 0.20, slAction: 'NONE' },
-                { tpRoi: 0.20, closePct: 0.20, slAction: 'MOVE_TO_ROI', slRoi: -0.10 },
-                { tpRoi: 0.33, closePct: 0.10, slAction: 'MOVE_TO_ROI', slRoi: 0.00 }, // Break-even
+                { tpRoi: 0.10, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.20, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.25, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 0.33, closePct: 0.10, slAction: 'NONE' },
                 { tpRoi: 0.50, closePct: 0.10, slAction: 'NONE' },
-                { tpRoi: 0.75, closePct: 0.20, slAction: 'MOVE_TO_ROI', slRoi: 0.25, activateTrailing: true },
+                { tpRoi: 0.75, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 1.00, closePct: 0.10, slAction: 'NONE' },
+                { tpRoi: 1.50, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 2.00, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 2.50, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 3.00, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 4.00, closePct: 0.05, slAction: 'NONE' },
+                { tpRoi: 5.00, closePct: 0.05, slAction: 'NONE' },
             ];
         }
     }
