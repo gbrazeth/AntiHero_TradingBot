@@ -8,12 +8,14 @@ export interface RiskParams {
     symbol: string;
     side: 'LONG' | 'SHORT';
     entryPrice: number;
+    wma250?: number;
 }
 
 export interface RiskResult {
     allowed: boolean;
     reason?: string;
     qty: number;
+    isHalfLot: boolean;
     slPrice: number;
     tps: { price: number; pct: number }[];
 }
@@ -106,7 +108,7 @@ export class RiskManager {
 
         if (dailyPnl?.isKillSwitchActive) {
             this.logger.warn({ date: today }, 'Kill switch active — entry blocked');
-            return { allowed: false, reason: 'Kill switch active for today', qty: 0, slPrice: 0, tps: [] };
+            return { allowed: false, reason: 'Kill switch active for today', qty: 0, isHalfLot: false, slPrice: 0, tps: [] };
         }
 
         if (dailyPnl) {
@@ -123,6 +125,7 @@ export class RiskManager {
                     allowed: false,
                     reason: `Daily drawdown limit reached (${(lossRatio * 100).toFixed(2)}%)`,
                     qty: 0,
+                    isHalfLot: false,
                     slPrice: 0,
                     tps: [],
                 };
@@ -132,7 +135,18 @@ export class RiskManager {
         // 2. Existing open position check moved to StrategyEngine for auto-reversal support
 
         // 3. Calculate qty (fixed_usdt mode)
-        const qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
+        let qty = this.calcQty(env.QTY_VALUE_USDT, params.entryPrice);
+        let isHalfLot = false;
+
+        if (params.wma250) {
+            if (params.side === 'LONG' && params.entryPrice > params.wma250 * 1.01) {
+                qty = parseFloat((qty / 2).toFixed(3));
+                isHalfLot = true;
+            } else if (params.side === 'SHORT' && params.entryPrice < params.wma250 * 0.99) {
+                qty = parseFloat((qty / 2).toFixed(3));
+                isHalfLot = true;
+            }
+        }
 
         // 4. Calculate SL price & TP prices (Starting in SCENARIO_1)
         const slPrice = this.calcSl(params.side, params.entryPrice);
@@ -141,11 +155,11 @@ export class RiskManager {
         const tps = this.calcTpsForRules(params.side, params.entryPrice, rules);
 
         this.logger.info(
-            { symbol: params.symbol, side: params.side, qty, slPrice, tps },
+            { symbol: params.symbol, side: params.side, qty, isHalfLot, slPrice, tps },
             'Risk check passed — entry allowed',
         );
 
-        return { allowed: true, qty, slPrice, tps };
+        return { allowed: true, qty, isHalfLot, slPrice, tps };
     }
 
     /**

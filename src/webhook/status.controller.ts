@@ -92,13 +92,13 @@ export async function statusController(app: FastifyInstance): Promise<void> {
     });
     /**
      * GET /status/history
-     * Fetches the recent 20 positions history from the bot's local SQLite ledger.
+     * Fetches the recent 200 positions history from the bot's local SQLite ledger.
      */
     app.get('/status/history', async (_request, reply) => {
         try {
             const history = await prisma.position.findMany({
                 orderBy: { createdAt: 'desc' },
-                take: 20,
+                take: 200,
             });
             return reply.status(200).send({ status: 'ok', history });
         } catch (err) {
@@ -123,7 +123,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             const logs = await prisma.tradeLog.findMany({
                 where,
                 orderBy: { createdAt: 'desc' },
-                take: 50,
+                take: 200,
             });
             return reply.status(200).send({ status: 'ok', logs });
         } catch (err) {

@@ -60,6 +60,8 @@ model Position {
   trailingActive  Boolean  @default(false) @map("trailing_active")
   trailingSlPrice Float?   @map("trailing_sl_price")
   maxRoiReached   Float    @default(0) @map("max_roi_reached")
+  isHalfLot       Boolean  @default(false) @map("is_half_lot")
+  dcaExecuted     Boolean  @default(false) @map("dca_executed")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 

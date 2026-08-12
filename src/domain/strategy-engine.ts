@@ -488,6 +488,97 @@ export class StrategyEngine {
                         closedQty: String(closedQty.toFixed(3)),
                         event: 'NATIVE_PARTIAL_HIT'
                     });
+                } else if (dbPos.isHalfLot && !dbPos.dcaExecuted) {
+                    const markPrice = parseFloat(realPos.markPrice);
+                    const currentPnl = dbPos.side === 'BUY'
+                        ? (markPrice - dbPos.entryPrice) * dbPos.currentQty
+                        : (dbPos.entryPrice - markPrice) * dbPos.currentQty;
+                    const margin = (dbPos.currentQty * dbPos.entryPrice) / (env.LEVERAGE || 20);
+                    const currentRoiPct = margin > 0 ? (currentPnl / margin) * 100 : 0;
+
+                    if (currentRoiPct <= -20.0) {
+                        this.logger.info({ symbol, posId: dbPos.id, currentRoiPct }, 'Sync: -20% ROI hit on half-lot. Executing DCA.');
+                        
+                        const exchangeSide = dbPos.side === 'BUY' ? 'BUY' : 'SELL';
+                        
+                        try {
+                            // 1. Execute Market Order to average down (buy/sell same as qty)
+                            await this.exchange.placeOrder({
+                                symbol: dbPos.symbol,
+                                side: exchangeSide,
+                                qty: String(dbPos.qty),
+                            });
+                            
+                            const newQty = parseFloat((dbPos.currentQty + dbPos.qty).toFixed(3));
+                            const newEntryPrice = ((dbPos.entryPrice * dbPos.currentQty) + (markPrice * dbPos.qty)) / newQty;
+                            
+                            // 2. New SL: -20% ROI of the new average entry price
+                            const leverage = env.LEVERAGE || 20;
+                            const priceMovePct = -0.20 / leverage; // -20% ROI
+                            const delta = newEntryPrice * priceMovePct;
+                            const newSlPrice = dbPos.side === 'BUY'
+                                ? parseFloat((newEntryPrice + delta).toFixed(2))
+                                : parseFloat((newEntryPrice - delta).toFixed(2));
+                            
+                            // 3. Cancel old SL and old TPs
+                            await this.exchange.cancelAllOpenOrders(dbPos.symbol);
+                            
+                            // 4. Place new SL
+                            await this.exchange.setTradingStop({
+                                symbol: dbPos.symbol,
+                                side: exchangeSide,
+                                stopLoss: String(newSlPrice),
+                                qty: String(newQty),
+                            });
+
+                            // 5. Re-place TPs for the new total quantity and new average entry price
+                            const rules = this.risk.getScenarioRules(dbPos.scenario as 'SCENARIO_1' | 'SCENARIO_2');
+                            const pendingRules = rules.filter(r => r.tpRoi > dbPos.maxRoiReached);
+                            const tps = this.risk.calcTpsForRules(dbPos.side === 'BUY' ? 'LONG' : 'SHORT', newEntryPrice, pendingRules);
+                            
+                            for (const tp of tps) {
+                                let tpQty = parseFloat((newQty * tp.pct).toFixed(3));
+                                const minQty = parseFloat((6.0 / newEntryPrice).toFixed(3));
+                                if (tpQty < minQty) tpQty = minQty;
+                                if (tpQty > newQty) tpQty = newQty;
+                                
+                                await this.exchange.setTakeProfit({
+                                    symbol: dbPos.symbol,
+                                    side: exchangeSide === 'BUY' ? 'SELL' : 'BUY',
+                                    tpPrice: String(tp.price),
+                                    qty: String(tpQty),
+                                });
+                            }
+
+                            // 6. Update DB
+                            await prisma.position.update({
+                                where: { id: dbPos.id },
+                                data: {
+                                    currentQty: newQty,
+                                    qty: dbPos.qty * 2, // Now standard full lot
+                                    entryPrice: newEntryPrice,
+                                    slPrice: newSlPrice,
+                                    dcaExecuted: true,
+                                }
+                            });
+
+                            await prisma.tradeLog.create({
+                                data: {
+                                    positionId: dbPos.id,
+                                    event: 'ENTRY_DCA',
+                                    side: dbPos.side,
+                                    symbol: dbPos.symbol,
+                                    qty: dbPos.qty,
+                                    price: markPrice,
+                                    pnl: null,
+                                    roiPct: parseFloat(currentRoiPct.toFixed(2)),
+                                    details: `DCA Executed at -20% ROI. New Avg Entry: ${newEntryPrice.toFixed(2)} | New SL: ${newSlPrice}`
+                                }
+                            });
+                        } catch(err) {
+                            this.logger.error({ err }, 'Failed to execute DCA logic');
+                        }
+                    }
                 } else if (realQty > dbPos.currentQty + 0.001) {
                     // Position increased (manual trade?), just update DB
                     await prisma.position.update({
@@ -580,6 +671,7 @@ export class StrategyEngine {
             symbol: payload.symbol,
             side,
             entryPrice: payload.price,
+            wma250: payload.wma_250,
         });
 
         if (!risk.allowed) {
@@ -617,6 +709,8 @@ export class StrategyEngine {
                 currentQty: risk.qty,
                 slPrice: risk.slPrice,
                 status: 'open',
+                isHalfLot: risk.isHalfLot,
+                dcaExecuted: false,
             },
         });
 

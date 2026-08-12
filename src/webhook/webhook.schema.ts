@@ -50,6 +50,8 @@ export const webhookPayloadSchema = z.object({
     }),
 
     trend_1d: z.enum(['UP', 'DOWN', 'NONE']).optional(),
+    
+    wma_250: z.number().optional(),
 });
 
 export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
