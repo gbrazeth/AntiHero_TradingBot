@@ -1,12 +1,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AntiHero Trading Bot — TradingView Webhook Connector v1.0
+// AntiHero Trading Bot — TradingView Webhook Connector v2.0
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// Este indicador lê o MACD (Entradas) e o VMC/Momentum (Saídas Parciais)
-// e dispara alertas no formato JSON que o bot AntiHero espera.
+// CHANGELOG v2.0:
+//   - Entradas AGRESSIVAS: dispara no cruzamento sem esperar fechamento da vela
+//   - WMA(250) incluída no payload JSON para lógica de meio-lote
+//   - SMA(9) crossover incluído para troca de cenário no bot
 //
 // COMO USAR:
-//   1. Adicione este indicador ao gráfico ETHUSDT (1H recomendado)
+//   1. Adicione este indicador ao gráfico ETHUSDT (15m ou 1H)
 //   2. Clique em "Alertas" → "Criar Alerta"
 //   3. Condição: selecione "AntiHero Webhook Connector" → "Any alert() function call"
 //   4. Marque o checkbox "URL de Webhook" e cole a URL do bot
@@ -37,6 +39,10 @@ strategy_id = input.string("PEDRO_MVP_V1", "Strategy ID", group="Bot Config")
 // Trend Filter (1D EMA)
 use_trend_filter = input.bool(true, "Enable 1D Trend Filter", group="Trend Filter")
 trend_ema_len    = input.int(200,   "Trend EMA Length",        group="Trend Filter")
+
+// WMA & SMA Settings (NEW v2.0)
+wma_len = input.int(250, "WMA Length (DCA distance)", group="Risk Management")
+sma_len = input.int(9,   "SMA Length (Scenario switch)", group="Risk Management")
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MACD CALCULATION — Indicador Principal de Entrada
@@ -98,6 +104,22 @@ entry_long_ok  = macd_cross_up   and (not use_trend_filter or trend_up)
 entry_short_ok = macd_cross_down and (not use_trend_filter or trend_down)
 
 // ══════════════════════════════════════════════════════════════════════════════
+// WMA(250) & SMA(9) — Risk Management Indicators (NEW v2.0)
+// ══════════════════════════════════════════════════════════════════════════════
+
+// WMA(250) — Used by bot to decide half-lot entries
+wma_250 = ta.wma(close, wma_len)
+
+// SMA(9) — Used by bot for scenario switching
+sma_9 = ta.sma(close, sma_len)
+sma9_cross_below = ta.crossunder(close, sma_9)  // Price crosses below SMA9 (LONG cautious)
+sma9_cross_above = ta.crossover(close, sma_9)   // Price crosses above SMA9 (SHORT cautious)
+
+// Plot the indicators on chart
+plot(wma_250, "WMA 250", color=color.new(color.purple, 30), linewidth=2)
+plot(sma_9,   "SMA 9",   color=color.new(color.orange, 30), linewidth=1)
+
+// ══════════════════════════════════════════════════════════════════════════════
 // VISUAL MARKERS — Sinais no Gráfico
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -109,6 +131,10 @@ plotshape(vmc_partial_50_long,  "P50 Long",  shape.diamond, location.abovebar, c
 plotshape(vmc_partial_25_short, "P25 Short", shape.diamond, location.belowbar, color.new(color.orange, 0), size=size.tiny)
 plotshape(vmc_partial_50_short, "P50 Short", shape.diamond, location.belowbar, color.new(color.yellow, 0), size=size.tiny)
 
+// SMA9 cross markers
+plotshape(sma9_cross_below, "SMA9 Lost", shape.xcross, location.abovebar, color.new(color.red, 20), size=size.tiny)
+plotshape(sma9_cross_above, "SMA9 Recovered", shape.xcross, location.belowbar, color.new(color.green, 20), size=size.tiny)
+
 // Background color for trend
 bgcolor(use_trend_filter ? (trend_up ? color.new(color.green, 95) : color.new(color.red, 95)) : na)
 
@@ -116,25 +142,33 @@ bgcolor(use_trend_filter ? (trend_up ? color.new(color.green, 95) : color.new(co
 // WEBHOOK ALERTS — JSON payloads para o Bot AntiHero
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Helper: build the JSON payload
+// Helper values
 tf_str = timeframe.period
+wma_str = str.tostring(wma_250, "#.##")
 
-// ENTRY ALERTS
-if entry_long_ok and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+// ── ENTRY ALERTS (AGGRESSIVE: once_per_bar, NO barstate.isConfirmed) ──────
+if entry_long_ok
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"MACD_ENTRY_LONG","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
 
-if entry_short_ok and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"MACD_ENTRY_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+if entry_short_ok
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"MACD_ENTRY_SHORT","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
 
-// PARTIAL EXIT ALERTS
+// ── SMA9 CROSSOVER ALERTS (Scenario switching) ───────────────────────────
+if sma9_cross_below
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"SMA9_CROSS_BELOW","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
+
+if sma9_cross_above
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"SMA9_CROSS_ABOVE","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
+
+// ── PARTIAL EXIT ALERTS (keep once_per_bar_close for exits) ───────────────
 if vmc_partial_25_long and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_LONG","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
 
 if vmc_partial_50_long and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_LONG","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_LONG","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
 
 if vmc_partial_25_short and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_SHORT","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
 
 if vmc_partial_50_short and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd'T'HH:mm:ss'Z'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_SHORT","trend_1d":"' + trend_str + '"}', alert.freq_once_per_bar_close)
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_SHORT","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
