@@ -96,14 +96,16 @@ export class TelegramNotifier {
         );
     }
 
-    async notifyBreakEven(params: {
+    async notifySlAdjusted(params: {
         symbol: string;
         newSl: number;
+        reason?: string;
     }): Promise<void> {
         await this.send(
-            `⚡ *BREAK-EVEN APPLIED*\n` +
+            `⚡ *SL ADJUSTED*\n` +
             `📊 Symbol: \`${params.symbol}\`\n` +
-            `🛡 New SL: \`${params.newSl}\``,
+            `🛡 New SL: \`${params.newSl}\`` +
+            (params.reason ? `\n📋 Reason: ${params.reason}` : ''),
         );
     }
 

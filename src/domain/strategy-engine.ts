@@ -81,25 +81,25 @@ export class StrategyEngine {
                 case 'VMC_PARTIAL_25_LONG':
                 case 'VMC_PARTIAL_50_LONG':
                 case 'MACD_PARTIAL_LONG':
-                    // Bullish momentum weakening -> exit pieces of a LONG position
-                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.33 });
+                    // v2.0: VMC/MACD partials DISABLED — TPs are managed natively on Binance
+                    this.logger.info({ event: payload.event }, 'VMC/MACD partial signal received but IGNORED (native TP management active)');
                     break;
 
                 case 'VMC_PARTIAL_25_SHORT':
                 case 'VMC_PARTIAL_50_SHORT':
                 case 'MACD_PARTIAL_SHORT':
-                    // Bearish momentum weakening -> exit pieces of a SHORT position
-                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.33 });
+                    // v2.0: VMC/MACD partials DISABLED — TPs are managed natively on Binance
+                    this.logger.info({ event: payload.event }, 'VMC/MACD partial signal received but IGNORED (native TP management active)');
                     break;
 
                 case 'TARGET_PRICE_LONG':
-                    // Target Price hit for LONG position
-                    await this.handlePartial({ payload, signalId, side: 'LONG', pct: 0.33 });
+                    // v2.0: Target price partials DISABLED — TPs are managed natively on Binance
+                    this.logger.info({ event: payload.event }, 'Target price signal received but IGNORED (native TP management active)');
                     break;
 
                 case 'TARGET_PRICE_SHORT':
-                    // Target Price hit for SHORT position
-                    await this.handlePartial({ payload, signalId, side: 'SHORT', pct: 0.33 });
+                    // v2.0: Target price partials DISABLED — TPs are managed natively on Binance
+                    this.logger.info({ event: payload.event }, 'Target price signal received but IGNORED (native TP management active)');
                     break;
 
                 case 'SMA9_CROSS_ABOVE':
@@ -238,9 +238,10 @@ export class StrategyEngine {
             }
 
             // Notify Telegram
-            await this.telegram.notifyBreakEven({
+            await this.telegram.notifySlAdjusted({
                 symbol: position.symbol,
                 newSl: newSlPrice,
+                reason: 'Scenario switch (SMA9 cross)',
             });
 
         } catch (err) {
@@ -378,9 +379,10 @@ export class StrategyEngine {
                                 '⚡ SL moved dynamically based on TP hit'
                             );
 
-                            await this.telegram.notifyBreakEven({
+                            await this.telegram.notifySlAdjusted({
                                 symbol: dbPos.symbol,
                                 newSl: newSlPrice as number,
+                                reason: 'TP hit - dynamic SL adjustment',
                             });
 
                             // Re-place remaining TP orders
@@ -788,6 +790,7 @@ export class StrategyEngine {
 
     // ── Partial Exit Logic ───────────────────────────────────────────────
 
+    // @ts-expect-error — handlePartial kept for potential reactivation but currently unused (v2.0: native TPs)
     private async handlePartial(params: {
         payload: WebhookPayload;
         signalId: number;
