@@ -1,0 +1,342 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AntiHero Trading Bot — Backtester v2.0
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Replica fielmente a estratégia v2.0 do bot em produção:
+//   - Entradas via MACD Crossover (12, 26, 9)
+//   - Filtro de Tendência 1D (EMA 200) — opcional
+//   - Lote fracionado baseado na distância da WMA(250)
+//   - Troca de cenário via SMA(9) crossover
+//   - 13 níveis de Take Profit escalonados
+//   - DCA (Preço Médio) quando ROI atinge -20% em operações de meio-lote
+//   - Stop Loss fixo configurável
+//
+// COMO USAR:
+//   1. Abra o gráfico ETHUSDT no TradingView
+//   2. Abra o Pine Editor → cole este código
+//   3. Clique em "Add to Chart" / "Adicionar ao Gráfico"
+//   4. A aba "Strategy Tester" aparecerá automaticamente abaixo do gráfico
+//   5. Ajuste os parâmetros nos inputs e veja os resultados em tempo real
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+//@version=6
+strategy("AntiHero Bot v2.0 — Backtester",
+     overlay        = true,
+     initial_capital = 2000,
+     default_qty_type = strategy.cash,
+     default_qty_value = 100,
+     commission_type  = strategy.commission.percent,
+     commission_value = 0.04,
+     slippage        = 1,
+     pyramiding      = 1,
+     process_orders_on_close = false,
+     calc_on_every_tick = false,
+     margin_long     = 5,
+     margin_short    = 5)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INPUTS
+// ══════════════════════════════════════════════════════════════════════════════
+
+// MACD Settings
+macd_fast   = input.int(12,  "MACD Fast Length",   group="1. MACD (Entradas)")
+macd_slow   = input.int(26,  "MACD Slow Length",   group="1. MACD (Entradas)")
+macd_signal = input.int(9,   "MACD Signal Length", group="1. MACD (Entradas)")
+
+// Trend Filter
+use_trend_filter = input.bool(true, "Ativar Filtro de Tendência 1D", group="2. Filtro de Tendência")
+trend_ema_len    = input.int(200,   "EMA Length (Diário)",           group="2. Filtro de Tendência")
+
+// Risk Management
+leverage    = input.int(20,    "Alavancagem",              group="3. Risco")
+sl_pct      = input.float(1.0, "Stop Loss (%)",            group="3. Risco", step=0.1) / 100
+lot_usdt    = input.float(100,  "Tamanho do Lote (USDT)",  group="3. Risco", step=10)
+
+// WMA & DCA
+wma_len         = input.int(250,   "WMA Length (Distância DCA)", group="4. WMA & DCA")
+wma_threshold   = input.float(1.0, "Distância WMA para Meio-Lote (%)", group="4. WMA & DCA", step=0.1) / 100
+dca_roi_trigger = input.float(-20,  "ROI para ativar DCA (%)",   group="4. WMA & DCA", step=1)
+dca_sl_roi      = input.float(-20,  "SL após DCA (% ROI)",       group="4. WMA & DCA", step=1)
+
+// SMA Scenario
+sma_len = input.int(9, "SMA Length (Troca de Cenário)", group="5. Cenários")
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INDICADORES
+// ══════════════════════════════════════════════════════════════════════════════
+
+// MACD
+[macdLine, signalLine, histLine] = ta.macd(close, macd_fast, macd_slow, macd_signal)
+macd_cross_up   = ta.crossover(macdLine, signalLine)
+macd_cross_down = ta.crossunder(macdLine, signalLine)
+
+// Trend Filter (1D EMA)
+ema_1d = request.security(syminfo.tickerid, "D", ta.ema(close, trend_ema_len))
+trend_up   = close > ema_1d
+trend_down = close < ema_1d
+
+// Entry conditions with optional trend filter
+entry_long  = macd_cross_up   and (not use_trend_filter or trend_up)
+entry_short = macd_cross_down and (not use_trend_filter or trend_down)
+
+// WMA(250) for half-lot logic
+wma_250 = ta.wma(close, wma_len)
+
+// SMA(9) for scenario switching
+sma_9 = ta.sma(close, sma_len)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE VARIABLES
+// ══════════════════════════════════════════════════════════════════════════════
+
+var float entry_price     = na
+var bool  is_long         = false
+var bool  is_short        = false
+var bool  is_half_lot     = false
+var bool  dca_executed    = false
+var float original_qty    = 0.0
+var float current_qty     = 0.0
+var float sl_price_var    = na
+
+// TP tracking
+var bool tp1_hit  = false
+var bool tp2_hit  = false
+var bool tp3_hit  = false
+var bool tp4_hit  = false
+var bool tp5_hit  = false
+var bool tp6_hit  = false
+var bool tp7_hit  = false
+var bool tp8_hit  = false
+var bool tp9_hit  = false
+var bool tp10_hit = false
+var bool tp11_hit = false
+var bool tp12_hit = false
+var bool tp13_hit = false
+
+var string current_scenario = "S1"
+var int total_trades = 0
+var int dca_count    = 0
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPER FUNCTIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+calc_roi(float ep, float cp, bool lng) =>
+    float pc = lng ? (cp - ep) / ep : (ep - cp) / ep
+    pc * leverage * 100
+
+reset_tps() =>
+    tp1_hit  := false
+    tp2_hit  := false
+    tp3_hit  := false
+    tp4_hit  := false
+    tp5_hit  := false
+    tp6_hit  := false
+    tp7_hit  := false
+    tp8_hit  := false
+    tp9_hit  := false
+    tp10_hit := false
+    tp11_hit := false
+    tp12_hit := false
+    tp13_hit := false
+
+// ══════════════════════════════════════════════════════════════════════════════
+// ENTRY LOGIC
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Auto-reversal
+if entry_long and is_short
+    strategy.close_all(comment="Reversal → LONG")
+    is_short := false
+    reset_tps()
+
+if entry_short and is_long
+    strategy.close_all(comment="Reversal → SHORT")
+    is_long := false
+    reset_tps()
+
+// LONG Entry
+if entry_long and not is_long
+    bool far_wma = close > wma_250 * (1 + wma_threshold)
+    float qty_u = far_wma ? lot_usdt / 2 : lot_usdt
+    float qty = qty_u / close
+
+    strategy.entry("LONG", strategy.long, qty=qty, comment=far_wma ? "LONG (½)" : "LONG")
+
+    entry_price     := close
+    is_long         := true
+    is_short        := false
+    is_half_lot     := far_wma
+    dca_executed    := false
+    original_qty    := qty
+    current_qty     := qty
+    sl_price_var    := close * (1 - sl_pct)
+    current_scenario := "S1"
+    total_trades    += 1
+    reset_tps()
+
+// SHORT Entry
+if entry_short and not is_short
+    bool far_wma = close < wma_250 * (1 - wma_threshold)
+    float qty_u = far_wma ? lot_usdt / 2 : lot_usdt
+    float qty = qty_u / close
+
+    strategy.entry("SHORT", strategy.short, qty=qty, comment=far_wma ? "SHORT (½)" : "SHORT")
+
+    entry_price     := close
+    is_long         := false
+    is_short        := true
+    is_half_lot     := far_wma
+    dca_executed    := false
+    original_qty    := qty
+    current_qty     := qty
+    sl_price_var    := close * (1 + sl_pct)
+    current_scenario := "S1"
+    total_trades    += 1
+    reset_tps()
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STOP LOSS
+// ══════════════════════════════════════════════════════════════════════════════
+
+if is_long and not na(sl_price_var)
+    strategy.exit("SL", "LONG", stop=sl_price_var)
+
+if is_short and not na(sl_price_var)
+    strategy.exit("SL", "SHORT", stop=sl_price_var)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// SCENARIO SWITCHING (SMA9)
+// ══════════════════════════════════════════════════════════════════════════════
+
+if is_long
+    if ta.crossunder(close, sma_9)
+        current_scenario := "S2"
+    if ta.crossover(close, sma_9)
+        current_scenario := "S1"
+
+if is_short
+    if ta.crossover(close, sma_9)
+        current_scenario := "S2"
+    if ta.crossunder(close, sma_9)
+        current_scenario := "S1"
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DCA LOGIC
+// ══════════════════════════════════════════════════════════════════════════════
+
+if (is_long or is_short) and is_half_lot and not dca_executed and not na(entry_price)
+    float roi_now = calc_roi(entry_price, close, is_long)
+    if roi_now <= dca_roi_trigger
+        float dca_qty = original_qty
+        if is_long
+            strategy.entry("LONG", strategy.long, qty=dca_qty, comment="DCA")
+        else
+            strategy.entry("SHORT", strategy.short, qty=dca_qty, comment="DCA")
+
+        float nq = current_qty + dca_qty
+        float ne = (entry_price * current_qty + close * dca_qty) / nq
+        float sl_move = dca_sl_roi / 100 / leverage
+        sl_price_var := is_long ? ne * (1 + sl_move) : ne * (1 - sl_move)
+        entry_price  := ne
+        current_qty  := nq
+        dca_executed := true
+        dca_count    += 1
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TAKE PROFIT — 13 Levels
+// ══════════════════════════════════════════════════════════════════════════════
+
+if (is_long or is_short) and not na(entry_price) and strategy.position_size != 0
+    float roi = calc_roi(entry_price, close, is_long)
+    string id = is_long ? "LONG" : "SHORT"
+
+    if not tp1_hit and roi >= 10
+        strategy.close(id, qty_percent=10, comment="TP 10%")
+        tp1_hit := true
+    if not tp2_hit and roi >= 20
+        strategy.close(id, qty_percent=11, comment="TP 20%")
+        tp2_hit := true
+    if not tp3_hit and roi >= 25
+        strategy.close(id, qty_percent=12, comment="TP 25%")
+        tp3_hit := true
+    if not tp4_hit and roi >= 33
+        strategy.close(id, qty_percent=14, comment="TP 33%")
+        tp4_hit := true
+    if not tp5_hit and roi >= 50
+        strategy.close(id, qty_percent=17, comment="TP 50%")
+        tp5_hit := true
+    if not tp6_hit and roi >= 75
+        strategy.close(id, qty_percent=20, comment="TP 75%")
+        tp6_hit := true
+    if not tp7_hit and roi >= 100
+        strategy.close(id, qty_percent=25, comment="TP 100%")
+        tp7_hit := true
+    if not tp8_hit and roi >= 150
+        strategy.close(id, qty_percent=17, comment="TP 150%")
+        tp8_hit := true
+    if not tp9_hit and roi >= 200
+        strategy.close(id, qty_percent=20, comment="TP 200%")
+        tp9_hit := true
+    if not tp10_hit and roi >= 250
+        strategy.close(id, qty_percent=25, comment="TP 250%")
+        tp10_hit := true
+    if not tp11_hit and roi >= 300
+        strategy.close(id, qty_percent=33, comment="TP 300%")
+        tp11_hit := true
+    if not tp12_hit and roi >= 400
+        strategy.close(id, qty_percent=50, comment="TP 400%")
+        tp12_hit := true
+    if not tp13_hit and roi >= 500
+        strategy.close(id, qty_percent=100, comment="TP 500% ★")
+        tp13_hit := true
+        is_long  := false
+        is_short := false
+
+// Detect position closed
+if strategy.position_size == 0 and (is_long or is_short)
+    is_long  := false
+    is_short := false
+
+// ══════════════════════════════════════════════════════════════════════════════
+// VISUALS
+// ══════════════════════════════════════════════════════════════════════════════
+
+plot(wma_250, "WMA 250", color=color.new(color.purple, 30), linewidth=2)
+plot(sma_9,   "SMA 9",   color=color.new(color.orange, 30), linewidth=1)
+plot(ema_1d,  "EMA 1D",  color=color.new(color.gray, 50),   linewidth=1, style=plot.style_cross)
+plot(is_long or is_short ? sl_price_var : na, "Stop Loss", color=color.new(color.red, 40), style=plot.style_linebr, linewidth=1)
+
+bgcolor(is_long or is_short ? (current_scenario == "S1" ? color.new(color.green, 95) : color.new(color.red, 95)) : na)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// PERFORMANCE TABLE
+// ══════════════════════════════════════════════════════════════════════════════
+
+var table perfTable = table.new(position.top_right, 2, 8, bgcolor=color.new(color.black, 80), border_width=1)
+
+if barstate.islast
+    table.cell(perfTable, 0, 0, "AntiHero Backtester v2.0", text_color=color.white, text_size=size.normal, bgcolor=color.new(color.blue, 60), text_halign=text.align_center)
+    table.merge_cells(perfTable, 0, 0, 1, 0)
+
+    table.cell(perfTable, 0, 1, "Leverage",       text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 1, str.tostring(leverage) + "x", text_color=color.white, text_size=size.small)
+
+    table.cell(perfTable, 0, 2, "Lote (USDT)",    text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 2, str.tostring(lot_usdt, "#.##"), text_color=color.white, text_size=size.small)
+
+    table.cell(perfTable, 0, 3, "Stop Loss",      text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 3, str.tostring(sl_pct * 100, "#.#") + "%", text_color=color.red, text_size=size.small)
+
+    table.cell(perfTable, 0, 4, "Trades",         text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 4, str.tostring(total_trades), text_color=color.white, text_size=size.small)
+
+    table.cell(perfTable, 0, 5, "DCA Executados",  text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 5, str.tostring(dca_count), text_color=color.yellow, text_size=size.small)
+
+    table.cell(perfTable, 0, 6, "Cenario Atual",   text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 6, current_scenario == "S1" ? "Cenario 1" : "Cenario 2", text_color=current_scenario == "S1" ? color.green : color.orange, text_size=size.small)
+
+    table.cell(perfTable, 0, 7, "Trend Filter",    text_color=color.gray, text_size=size.small)
+    table.cell(perfTable, 1, 7, use_trend_filter ? (trend_up ? "UP" : "DOWN") : "OFF", text_color=color.white, text_size=size.small)
