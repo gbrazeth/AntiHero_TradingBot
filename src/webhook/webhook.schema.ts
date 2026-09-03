@@ -4,6 +4,8 @@ import { z } from 'zod';
  * Valid webhook events as defined in spec section 3.
  */
 export const VALID_EVENTS = [
+    'SMA_ENTRY_LONG',
+    'SMA_ENTRY_SHORT',
     'MACD_ENTRY_LONG',
     'MACD_ENTRY_SHORT',
     'RSI_ENTRY_LONG',

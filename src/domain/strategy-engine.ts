@@ -66,16 +66,21 @@ export class StrategyEngine {
 
         try {
             switch (payload.event as WebhookEvent) {
-                case 'MACD_ENTRY_LONG':
-                case 'RSI_ENTRY_LONG':
+                case 'SMA_ENTRY_LONG':
                 case 'TREND_ENTRY_LONG':
                     await this.handleEntry({ payload, signalId, side: 'LONG' });
                     break;
 
-                case 'MACD_ENTRY_SHORT':
-                case 'RSI_ENTRY_SHORT':
+                case 'SMA_ENTRY_SHORT':
                 case 'TREND_ENTRY_SHORT':
                     await this.handleEntry({ payload, signalId, side: 'SHORT' });
+                    break;
+
+                case 'MACD_ENTRY_LONG':
+                case 'MACD_ENTRY_SHORT':
+                case 'RSI_ENTRY_LONG':
+                case 'RSI_ENTRY_SHORT':
+                    this.logger.info({ event: payload.event }, 'Legacy MACD/RSI entry signal received but IGNORED (Pedro setup uses SMA only)');
                     break;
 
                 case 'VMC_PARTIAL_25_LONG':

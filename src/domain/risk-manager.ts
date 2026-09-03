@@ -140,11 +140,31 @@ export class RiskManager {
 
         if (params.wma250) {
             if (params.side === 'LONG' && params.entryPrice > params.wma250 * 1.01) {
-                qty = parseFloat((qty / 2).toFixed(3));
-                isHalfLot = true;
+                this.logger.info(
+                    { entryPrice: params.entryPrice, wma250: params.wma250 },
+                    'LONG entry blocked by WMA(250) filter: price is >1% above WMA(250)',
+                );
+                return {
+                    allowed: false,
+                    reason: `LONG blocked: entry price (${params.entryPrice}) > 1% above WMA250 (${params.wma250})`,
+                    qty: 0,
+                    isHalfLot: false,
+                    slPrice: 0,
+                    tps: [],
+                };
             } else if (params.side === 'SHORT' && params.entryPrice < params.wma250 * 0.99) {
-                qty = parseFloat((qty / 2).toFixed(3));
-                isHalfLot = true;
+                this.logger.info(
+                    { entryPrice: params.entryPrice, wma250: params.wma250 },
+                    'SHORT entry blocked by WMA(250) filter: price is >1% below WMA(250)',
+                );
+                return {
+                    allowed: false,
+                    reason: `SHORT blocked: entry price (${params.entryPrice}) > 1% below WMA250 (${params.wma250})`,
+                    qty: 0,
+                    isHalfLot: false,
+                    slPrice: 0,
+                    tps: [],
+                };
             }
         }
 
