@@ -1,174 +1,90 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// AntiHero Trading Bot — TradingView Webhook Connector v2.0
+// AntiHero Trading Bot — TradingView Webhook Connector v2.2 (Setup Pedro)
 // ─────────────────────────────────────────────────────────────────────────────
 //
-// CHANGELOG v2.0:
-//   - Entradas AGRESSIVAS: dispara no cruzamento sem esperar fechamento da vela
-//   - WMA(250) incluída no payload JSON para lógica de meio-lote
-//   - SMA(9) crossover incluído para troca de cenário no bot
+// REGRAS OFICIAIS DO SETUP:
+//   1. Gatilho de Entrada: Cruzamento da SMA 9 com a WMA 250
+//      - LONG:  SMA 9 cruza ACIMA da WMA 250
+//      - SHORT: SMA 9 cruza ABAIXO da WMA 250
+//   2. Filtro WMA 250 (1%):
+//      - LONG:  Se Preço > WMA 250 + 1% → NÃO entra (bloqueia topo)
+//      - SHORT: Se Preço < WMA 250 - 1% → NÃO entra (bloqueia fundo)
+//   3. Stop Loss: 1,0% no preço (gerenciado pelo robô na Binance)
+//   4. Trava 1D: Desativada
 //
-// COMO USAR:
-//   1. Adicione este indicador ao gráfico ETHUSDT (15m ou 1H)
-//   2. Clique em "Alertas" → "Criar Alerta"
-//   3. Condição: selecione "AntiHero Webhook Connector" → "Any alert() function call"
-//   4. Marque o checkbox "URL de Webhook" e cole a URL do bot
-//   5. Deixe a Mensagem em branco (o script já envia o JSON correto)
+// COMO CRIAR O ALERTA NO TRADINGVIEW:
+//   1. Adicione este indicador ao gráfico ETHUSDT (1H)
+//   2. Clique no ícone de Alarme ("Criar Alerta")
+//   3. Condição: Selecione "AntiHero Webhook Connector (Setup Pedro)" → "Qualquer chamada de função de alerta()"
+//   4. Notificações: Marque "URL do Webhook" e insira:
+//      https://antihero-tradingbot.onrender.com/webhook/tradingview?token=dev-token-change-me
+//   5. Mensagem: Deixe em branco (o script já envia o JSON correto)
 //   6. Clique em "Criar"
-//
 // ─────────────────────────────────────────────────────────────────────────────
 
 //@version=6
-indicator("AntiHero Webhook Connector", overlay=true)
+indicator("AntiHero Webhook Connector (Setup Pedro)", overlay=true)
 
 // ══════════════════════════════════════════════════════════════════════════════
-// INPUTS — Parâmetros ajustáveis
+// INPUTS
 // ══════════════════════════════════════════════════════════════════════════════
 
-// MACD Settings
-macd_fast   = input.int(12,  "MACD Fast Length",   group="MACD Settings")
-macd_slow   = input.int(26,  "MACD Slow Length",   group="MACD Settings")
-macd_signal = input.int(9,   "MACD Signal Length", group="MACD Settings")
+strategy_id    = input.string("PEDRO_MVP_V1", "Strategy ID", group="Configuração do Bot")
+sma_len        = input.int(9,   "SMA Curta",  group="Médias Móveis")
+wma_len        = input.int(250, "WMA Longa",  group="Médias Móveis")
 
-// VMC / Momentum Settings (VuManChu Cipher B inspired)
-vmc_length  = input.int(14,  "VMC Wave Length",    group="VMC Settings")
-vmc_channel = input.int(21,  "VMC Channel Length", group="VMC Settings")
-
-// Strategy Config
-strategy_id = input.string("PEDRO_MVP_V1", "Strategy ID", group="Bot Config")
-
-// Trend Filter (1D EMA)
-use_trend_filter = input.bool(true, "Enable 1D Trend Filter", group="Trend Filter")
-trend_ema_len    = input.int(200,   "Trend EMA Length",        group="Trend Filter")
-
-// WMA & SMA Settings (NEW v2.0)
-wma_len = input.int(250, "WMA Length (DCA distance)", group="Risk Management")
-sma_len = input.int(9,   "SMA Length (Scenario switch)", group="Risk Management")
+// Filtro de 1% da WMA 250 (Regra Pedro)
+use_wma_filter = input.bool(true,  "Ativar Filtro de 1% da WMA 250", group="Filtro WMA 250")
+wma_threshold  = input.float(1.0,  "Distância Limite WMA (%)", step=0.1, group="Filtro WMA 250") / 100
 
 // ══════════════════════════════════════════════════════════════════════════════
-// MACD CALCULATION — Indicador Principal de Entrada
+// CÁLCULOS DAS MÉDIAS
 // ══════════════════════════════════════════════════════════════════════════════
 
-[macdLine, signalLine, histLine] = ta.macd(close, macd_fast, macd_slow, macd_signal)
-
-// Entry signals: MACD line crosses the signal line
-macd_cross_up   = ta.crossover(macdLine, signalLine)   // Bullish → LONG
-macd_cross_down = ta.crossunder(macdLine, signalLine)  // Bearish → SHORT
-
-// ══════════════════════════════════════════════════════════════════════════════
-// VMC / MOMENTUM — Indicador de Saída Parcial
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Simplified VuManChu-inspired momentum wave
-vmc_wave = ta.ema(close - ta.ema(close, vmc_channel), vmc_length)
-vmc_prev = vmc_wave[1]
-
-// Momentum divergence detection for partial exits
-// When momentum weakens against the position direction
-vmc_bull_weakening = vmc_wave > 0 and vmc_wave < vmc_prev and vmc_prev > vmc_wave[2]  // Peak formed in bullish
-vmc_bear_weakening = vmc_wave < 0 and vmc_wave > vmc_prev and vmc_prev < vmc_wave[2]  // Trough formed in bearish
-
-// Count consecutive weakening signals for 25% vs 50%
-var int bull_weak_count = 0
-var int bear_weak_count = 0
-
-if macd_cross_up
-    bull_weak_count := 0
-    bear_weak_count := 0
-if macd_cross_down
-    bull_weak_count := 0
-    bear_weak_count := 0
-
-if vmc_bull_weakening
-    bull_weak_count += 1
-if vmc_bear_weakening
-    bear_weak_count += 1
-
-// First weakening = 25% partial, Second = 50% partial
-vmc_partial_25_long  = vmc_bull_weakening and bull_weak_count == 1
-vmc_partial_50_long  = vmc_bull_weakening and bull_weak_count == 2
-vmc_partial_25_short = vmc_bear_weakening and bear_weak_count == 1
-vmc_partial_50_short = vmc_bear_weakening and bear_weak_count == 2
-
-// ══════════════════════════════════════════════════════════════════════════════
-// 1D TREND FILTER — Filtro direcional
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Request 1D EMA for trend direction
-ema_1d = request.security(syminfo.tickerid, "D", ta.ema(close, trend_ema_len))
-trend_up   = close > ema_1d
-trend_down = close < ema_1d
-trend_str  = trend_up ? "UP" : trend_down ? "DOWN" : "NONE"
-
-// Apply filter if enabled
-entry_long_ok  = macd_cross_up   and (not use_trend_filter or trend_up)
-entry_short_ok = macd_cross_down and (not use_trend_filter or trend_down)
-
-// ══════════════════════════════════════════════════════════════════════════════
-// WMA(250) & SMA(9) — Risk Management Indicators (NEW v2.0)
-// ══════════════════════════════════════════════════════════════════════════════
-
-// WMA(250) — Used by bot to decide half-lot entries
+sma_9   = ta.sma(close, sma_len)
 wma_250 = ta.wma(close, wma_len)
 
-// SMA(9) — Used by bot for scenario switching
-sma_9 = ta.sma(close, sma_len)
-sma9_cross_below = ta.crossunder(close, sma_9)  // Price crosses below SMA9 (LONG cautious)
-sma9_cross_above = ta.crossover(close, sma_9)   // Price crosses above SMA9 (SHORT cautious)
+// Cruzamentos
+sma_cross_up   = ta.crossover(sma_9, wma_250)
+sma_cross_down = ta.crossunder(sma_9, wma_250)
 
-// Plot the indicators on chart
-plot(wma_250, "WMA 250", color=color.new(color.purple, 30), linewidth=2)
-plot(sma_9,   "SMA 9",   color=color.new(color.orange, 30), linewidth=1)
+// Verificação da Regra de 1% da WMA 250
+bool is_wma_ok_long  = not use_wma_filter or (close <= wma_250 * (1 + wma_threshold))
+bool is_wma_ok_short = not use_wma_filter or (close >= wma_250 * (1 - wma_threshold))
 
-// ══════════════════════════════════════════════════════════════════════════════
-// VISUAL MARKERS — Sinais no Gráfico
-// ══════════════════════════════════════════════════════════════════════════════
-
-plotshape(entry_long_ok,  "LONG Entry",  shape.triangleup,   location.belowbar, color.new(color.green, 0), size=size.normal)
-plotshape(entry_short_ok, "SHORT Entry", shape.triangledown, location.abovebar, color.new(color.red, 0),   size=size.normal)
-
-plotshape(vmc_partial_25_long,  "P25 Long",  shape.diamond, location.abovebar, color.new(color.orange, 0), size=size.tiny)
-plotshape(vmc_partial_50_long,  "P50 Long",  shape.diamond, location.abovebar, color.new(color.yellow, 0), size=size.tiny)
-plotshape(vmc_partial_25_short, "P25 Short", shape.diamond, location.belowbar, color.new(color.orange, 0), size=size.tiny)
-plotshape(vmc_partial_50_short, "P50 Short", shape.diamond, location.belowbar, color.new(color.yellow, 0), size=size.tiny)
-
-// SMA9 cross markers
-plotshape(sma9_cross_below, "SMA9 Lost", shape.xcross, location.abovebar, color.new(color.red, 20), size=size.tiny)
-plotshape(sma9_cross_above, "SMA9 Recovered", shape.xcross, location.belowbar, color.new(color.green, 20), size=size.tiny)
-
-// Background color for trend
-bgcolor(use_trend_filter ? (trend_up ? color.new(color.green, 95) : color.new(color.red, 95)) : na)
+// Entradas Validadas
+bool entry_long_valid  = sma_cross_up   and is_wma_ok_long
+bool entry_short_valid = sma_cross_down and is_wma_ok_short
 
 // ══════════════════════════════════════════════════════════════════════════════
-// WEBHOOK ALERTS — JSON payloads para o Bot AntiHero
+// PLOTS VISUAIS NO GRÁFICO
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Helper values
-tf_str = timeframe.period
+plot(wma_250, "WMA 250", color=color.new(color.purple, 20), linewidth=2)
+plot(sma_9,   "SMA 9",   color=color.new(color.orange, 20), linewidth=1)
+
+// Faixa permitida do 1% da WMA 250
+p_top = plot(wma_250 * (1 + wma_threshold), "WMA +1%", color=color.new(color.red, 75), style=plot.style_circles)
+p_bot = plot(wma_250 * (1 - wma_threshold), "WMA -1%", color=color.new(color.green, 75), style=plot.style_circles)
+fill(p_top, p_bot, color=color.new(color.purple, 94), title="Faixa Permitida WMA (1%)")
+
+// Sinais no Gráfico
+plotshape(entry_long_valid,  "LONG Entry",  shape.triangleup,   location.belowbar, color=color.green, size=size.normal)
+plotshape(entry_short_valid, "SHORT Entry", shape.triangledown, location.abovebar, color=color.red,   size=size.normal)
+
+// Marcador quando o cruzamento é bloqueado pelo 1%
+plotshape(sma_cross_up and not is_wma_ok_long,   "LONG Bloqueado (>1% WMA)", shape.xcross, location.belowbar, color=color.orange, size=size.small)
+plotshape(sma_cross_down and not is_wma_ok_short, "SHORT Bloqueado (>1% WMA)", shape.xcross, location.abovebar, color=color.orange, size=size.small)
+
+// ══════════════════════════════════════════════════════════════════════════════
+// WEBHOOK ALERTS (DISPARO PARA O BOT)
+// ══════════════════════════════════════════════════════════════════════════════
+
+tf_str  = timeframe.period
 wma_str = str.tostring(wma_250, "#.##")
 
-// ── ENTRY ALERTS (AGGRESSIVE: once_per_bar, NO barstate.isConfirmed) ──────
-if entry_long_ok
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"MACD_ENTRY_LONG","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
+if entry_long_valid
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"SMA_ENTRY_LONG","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
 
-if entry_short_ok
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"MACD_ENTRY_SHORT","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
-
-// ── SMA9 CROSSOVER ALERTS (Scenario switching) ───────────────────────────
-if sma9_cross_below
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"SMA9_CROSS_BELOW","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
-
-if sma9_cross_above
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"SMA9_CROSS_ABOVE","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
-
-// ── PARTIAL EXIT ALERTS (keep once_per_bar_close for exits) ───────────────
-if vmc_partial_25_long and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_LONG","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
-
-if vmc_partial_50_long and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_LONG","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
-
-if vmc_partial_25_short and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_25_SHORT","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
-
-if vmc_partial_50_short and barstate.isconfirmed
-    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":true,"event":"VMC_PARTIAL_50_SHORT","trend_1d":"' + trend_str + '","wma_250":' + wma_str + '}', alert.freq_once_per_bar_close)
+if entry_short_valid
+    alert('{"strategy_id":"' + strategy_id + '","exchange":"BINANCE_TESTNET","symbol":"' + syminfo.ticker + '","timeframe":"' + tf_str + '","price":' + str.tostring(close) + ',"timestamp":"' + str.format_time(timenow, "yyyy-MM-dd\'T\'HH:mm:ss\'Z\'", "UTC") + '","bar_close":false,"event":"SMA_ENTRY_SHORT","wma_250":' + wma_str + '}', alert.freq_once_per_bar)
