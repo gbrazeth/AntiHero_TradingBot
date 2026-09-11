@@ -1,12 +1,11 @@
-// Prisma schema for BOT Trader MVP V1
-// Tables: signals, orders, positions, daily_pnl, settings
-
+// Prisma schema for BOT Trader MVP V3
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Signal {
@@ -17,7 +16,7 @@ model Signal {
   timeframe       String
   price           Float
   signalTimestamp String   @map("signal_timestamp")
-  barClose        Boolean  @map("bar_close")
+  barClose        Boolean? @map("bar_close")
   event           String
   idempotencyHash String   @unique @map("idempotency_hash")
   processedAt     DateTime @default(now()) @map("processed_at")
@@ -53,15 +52,8 @@ model Position {
   qty             Float
   currentQty      Float    @map("current_qty")
   slPrice         Float?   @map("sl_price")
-  beApplied       Boolean  @default(false) @map("be_applied")
   realizedPnl     Float?   @map("realized_pnl")
   status          String   @default("open")
-  scenario        String   @default("SCENARIO_1") // SCENARIO_1 or SCENARIO_2
-  trailingActive  Boolean  @default(false) @map("trailing_active")
-  trailingSlPrice Float?   @map("trailing_sl_price")
-  maxRoiReached   Float    @default(0) @map("max_roi_reached")
-  isHalfLot       Boolean  @default(false) @map("is_half_lot")
-  dcaExecuted     Boolean  @default(false) @map("dca_executed")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
@@ -93,7 +85,7 @@ model Setting {
 model TradeLog {
   id         Int      @id @default(autoincrement())
   positionId Int      @map("position_id")
-  event      String   // ENTRY, PARTIAL_TP, BREAK_EVEN, SL_HIT, FULL_CLOSE, REVERSAL
+  event      String   // ENTRY, SL_HIT, FULL_CLOSE, REVERSAL
   side       String   // BUY or SELL
   symbol     String
   qty        Float
