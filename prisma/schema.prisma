@@ -50,8 +50,12 @@ model Position {
   entryPrice      Float    @map("entry_price")
   qty             Float
   currentQty      Float    @map("current_qty")
+  originalQty     Float?   @map("original_qty")
   slPrice         Float?   @map("sl_price")
   realizedPnl     Float?   @map("realized_pnl")
+  lastTpHit       Int      @default(0) @map("last_tp_hit")
+  trailingActive  Boolean  @default(false) @map("trailing_active")
+  beApplied       Boolean  @default(false) @map("be_applied")
   status          String   @default("open")
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")

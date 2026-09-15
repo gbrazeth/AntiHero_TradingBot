@@ -28,15 +28,29 @@ const envSchema = z.object({
 
     // Trading Parameters
     SL_PCT: z.coerce.number().default(0.01),
-    BE_BUFFER: z.coerce.number().default(0.0005),
-    TP1_PCT: z.coerce.number().default(0.015),
-    TP2_PCT: z.coerce.number().default(0.03),
+    WMA_FILTER_PCT: z.coerce.number().default(0.02),  // 2% distance filter
     DAILY_DD_LIMIT: z.coerce.number().default(0.04),
     CAP_EXPOSURE_PCT: z.coerce.number().default(0.10),
     QTY_MODE: z.enum(['fixed_usdt']).default('fixed_usdt'),
     QTY_VALUE_USDT: z.coerce.number().default(50),
-    MIN_REMAINING_POSITION_PCT: z.coerce.number().default(0.10),
     LEVERAGE: z.coerce.number().default(20),
+
+    // Take Profit Levels (ROI fractions)
+    TP1_ROI: z.coerce.number().default(0.10),   // 10% ROI
+    TP2_ROI: z.coerce.number().default(0.25),   // 25% ROI
+    TP3_ROI: z.coerce.number().default(0.50),   // 50% ROI
+    TP4_ROI: z.coerce.number().default(1.00),   // 100% ROI
+    TP5_ROI: z.coerce.number().default(2.00),   // 200% ROI
+
+    // Take Profit Slice Percentages (of original position)
+    TP1_SLICE: z.coerce.number().default(0.10),  // 10%
+    TP2_SLICE: z.coerce.number().default(0.15),  // 15%
+    TP3_SLICE: z.coerce.number().default(0.15),  // 15%
+    TP4_SLICE: z.coerce.number().default(0.25),  // 25%
+    TP5_SLICE: z.coerce.number().default(0.15),  // 15%
+
+    // Trailing Stop (ROI distance)
+    TRAILING_STOP_ROI: z.coerce.number().default(0.25),  // 25% ROI distance
 });
 
 export type Env = z.infer<typeof envSchema>;

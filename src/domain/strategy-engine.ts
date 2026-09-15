@@ -4,17 +4,20 @@ import { prisma } from '../infra/prisma.js';
 import { RiskManager } from './risk-manager.js';
 import { BinanceAdapter } from '../infra/binance-adapter.js';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';
+import { TpManager } from './tp-manager.js';
 import { env } from '../config/env.js';
 
 export class StrategyEngine {
     private readonly risk: RiskManager;
     private readonly exchange: BinanceAdapter;
     private readonly telegram: TelegramNotifier;
+    private readonly tpManager: TpManager;
 
     constructor(private readonly logger: FastifyBaseLogger) {
         this.risk = new RiskManager(logger);
         this.exchange = new BinanceAdapter(logger);
         this.telegram = new TelegramNotifier(logger);
+        this.tpManager = new TpManager(logger, this.exchange, this.telegram);
     }
 
     public startPolling(): void {
@@ -27,6 +30,12 @@ export class StrategyEngine {
         const openPositions = await prisma.position.findMany({ where: { status: 'open' } });
         for (const pos of openPositions) {
             await this.syncPositionState(pos.symbol);
+            
+            // Check TPs
+            const refreshedPos = await prisma.position.findUnique({ where: { id: pos.id } });
+            if (refreshedPos && refreshedPos.status === 'open' && refreshedPos.currentQty > 0) {
+                await this.tpManager.checkAndExecuteTPs(refreshedPos);
+            }
         }
     }
 
@@ -63,7 +72,10 @@ export class StrategyEngine {
             });
 
             if (dbPos && !realPos) {
-                this.logger.info({ symbol, posId: dbPos.id }, 'Sync: Position closed on Binance (likely SL). Updating DB.');
+                this.logger.info({ symbol, posId: dbPos.id }, 'Sync: Position closed on Binance (likely SL or trailing). Updating DB.');
+
+                // Cancel any dangling stops
+                await this.exchange.cancelAllOpenOrders(symbol);
 
                 const closePrice = dbPos.slPrice || dbPos.entryPrice;
                 const slHitPnl = dbPos.side === 'BUY'
@@ -87,14 +99,14 @@ export class StrategyEngine {
                 await prisma.tradeLog.create({
                     data: {
                         positionId: dbPos.id,
-                        event: 'SL_HIT',
+                        event: 'CLOSED',
                         side: dbPos.side,
                         symbol: dbPos.symbol,
                         qty: dbPos.currentQty,
                         price: closePrice,
                         pnl: parseFloat(slHitPnl.toFixed(4)),
                         roiPct: parseFloat(roiPct.toFixed(2)),
-                        details: 'Position fully closed on Binance (SL or manual)',
+                        details: 'Position fully closed on Binance (SL, Trailing, or manual)',
                     },
                 });
             }
@@ -123,6 +135,8 @@ export class StrategyEngine {
             } else {
                 this.logger.info({ posId: openPos.id }, 'Opposite position detected. Executing Auto-Reversal.');
                 
+                await this.exchange.cancelAllOpenOrders(payload.symbol);
+                
                 await this.exchange.placeOrder({
                     symbol: payload.symbol,
                     side: exchangeSide, // to close a SHORT we BUY, to close a LONG we SELL
@@ -130,7 +144,6 @@ export class StrategyEngine {
                     reduceOnly: true,
                 });
 
-                await this.exchange.cancelAllOpenOrders(payload.symbol);
                 await new Promise(res => setTimeout(res, 1500));
                 
                 const closedQty = openPos.currentQty;
@@ -204,6 +217,7 @@ export class StrategyEngine {
                 entryPrice: payload.price,
                 qty: risk.qty,
                 currentQty: risk.qty,
+                originalQty: risk.qty,
                 slPrice: risk.slPrice,
                 status: 'open',
             },

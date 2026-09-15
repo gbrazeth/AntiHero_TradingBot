@@ -60,27 +60,28 @@ export class RiskManager {
             }
         }
 
-        // 2. WMA 250 Filter Check (1%)
+        // 2. WMA 250 Filter Check (Dynamic WMA_FILTER_PCT, e.g. 2%)
         if (params.wma250) {
-            if (params.side === 'LONG' && params.entryPrice > params.wma250 * 1.01) {
+            const wmaPct = env.WMA_FILTER_PCT;
+            if (params.side === 'LONG' && params.entryPrice > params.wma250 * (1 + wmaPct)) {
                 this.logger.info(
-                    { entryPrice: params.entryPrice, wma250: params.wma250 },
-                    'LONG entry blocked by WMA(250) filter: price is >1% above WMA(250)',
+                    { entryPrice: params.entryPrice, wma250: params.wma250, pct: wmaPct },
+                    `LONG entry blocked by WMA(250) filter: price is >${wmaPct * 100}% above WMA(250)`,
                 );
                 return {
                     allowed: false,
-                    reason: `LONG blocked: entry price (${params.entryPrice}) > 1% above WMA250 (${params.wma250})`,
+                    reason: `LONG blocked: entry price (${params.entryPrice}) > ${wmaPct * 100}% above WMA250 (${params.wma250})`,
                     qty: 0,
                     slPrice: 0,
                 };
-            } else if (params.side === 'SHORT' && params.entryPrice < params.wma250 * 0.99) {
+            } else if (params.side === 'SHORT' && params.entryPrice < params.wma250 * (1 - wmaPct)) {
                 this.logger.info(
-                    { entryPrice: params.entryPrice, wma250: params.wma250 },
-                    'SHORT entry blocked by WMA(250) filter: price is >1% below WMA(250)',
+                    { entryPrice: params.entryPrice, wma250: params.wma250, pct: wmaPct },
+                    `SHORT entry blocked by WMA(250) filter: price is >${wmaPct * 100}% below WMA(250)`,
                 );
                 return {
                     allowed: false,
-                    reason: `SHORT blocked: entry price (${params.entryPrice}) > 1% below WMA250 (${params.wma250})`,
+                    reason: `SHORT blocked: entry price (${params.entryPrice}) > ${wmaPct * 100}% below WMA250 (${params.wma250})`,
                     qty: 0,
                     slPrice: 0,
                 };

@@ -35,7 +35,7 @@ wma_len        = input.int(250, "WMA Longa",  group="Médias Móveis")
 
 // Filtro de 1% da WMA 250 (Regra Pedro)
 use_wma_filter = input.bool(true,  "Ativar Filtro de 1% da WMA 250", group="Filtro WMA 250")
-wma_threshold  = input.float(1.0,  "Distância Limite WMA (%)", step=0.1, group="Filtro WMA 250") / 100
+wma_threshold  = input.float(2.0,  "Distância Limite WMA (%)", step=0.1, group="Filtro WMA 250") / 100
 
 // ══════════════════════════════════════════════════════════════════════════════
 // CÁLCULOS DAS MÉDIAS
