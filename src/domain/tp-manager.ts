@@ -142,7 +142,7 @@ export class TpManager {
             await this.activateTrailingStop(position, currentPrice);
         }
 
-        await this.telegram.sendMessage(`🎯 <b>TP${tp.level} Atingido!</b>\nPar: ${position.symbol}\nPreço: ${currentPrice}\nROI: ${(currentRoi * 100).toFixed(2)}%\nFechado: ${qtyToClose} (Ficou: ${position.currentQty})\nAção: ${tp.action}`);
+        await this.telegram.send(`🎯 *TP${tp.level} Atingido!*\nPar: ${position.symbol}\nPreço: ${currentPrice}\nROI: ${(currentRoi * 100).toFixed(2)}%\nFechado: ${qtyToClose} (Ficou: ${position.currentQty})\nAção: ${tp.action}`);
     }
 
     private async applyBreakEven(position: PositionData): Promise<void> {
