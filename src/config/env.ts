@@ -41,6 +41,7 @@ const envSchema = z.object({
     TP3_ROI: z.coerce.number().default(0.50),   // 50% ROI
     TP4_ROI: z.coerce.number().default(1.00),   // 100% ROI
     TP5_ROI: z.coerce.number().default(2.00),   // 200% ROI
+    TP6_ROI: z.coerce.number().default(3.00),   // 300% ROI
 
     // Take Profit Slice Percentages (of original position)
     TP1_SLICE: z.coerce.number().default(0.10),  // 10%
@@ -48,9 +49,7 @@ const envSchema = z.object({
     TP3_SLICE: z.coerce.number().default(0.15),  // 15%
     TP4_SLICE: z.coerce.number().default(0.25),  // 25%
     TP5_SLICE: z.coerce.number().default(0.15),  // 15%
-
-    // Trailing Stop (ROI distance)
-    TRAILING_STOP_ROI: z.coerce.number().default(0.25),  // 25% ROI distance
+    TP6_SLICE: z.coerce.number().default(0.20),  // 20%
 });
 
 export type Env = z.infer<typeof envSchema>;
