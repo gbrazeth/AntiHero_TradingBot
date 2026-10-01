@@ -190,7 +190,30 @@ export class TpManager {
                 
                 this.logger.info({ symbol: position.symbol, slPrice }, 'Stop loss updated successfully');
             } catch (err) {
-                this.logger.error({ err, symbol: position.symbol }, 'Failed to update stop loss');
+                this.logger.error({ err, symbol: position.symbol }, 'CRITICAL ERROR: Failed to update stop loss! Position is unprotected.');
+                await this.telegram.notifyError(
+                    'EMERGENCY PANIC',
+                    new Error(`FALHA CRÍTICA: Corretora recusou atualizar o Stop Loss no TP! Fechando o restante da posição ${position.symbol} a mercado para proteger o lucro.`)
+                );
+                
+                try {
+                    const panicSide = position.side === 'BUY' ? 'SELL' : 'BUY';
+                    await this.exchange.placeOrder({
+                        symbol: position.symbol,
+                        side: panicSide,
+                        qty: String(position.currentQty),
+                        reduceOnly: true,
+                    });
+                    
+                    await prisma.position.update({
+                        where: { id: position.id },
+                        data: { currentQty: 0, status: 'closed' }
+                    });
+                    position.currentQty = 0;
+                    await this.telegram.notifyError('EMERGENCY PANIC', new Error(`Posição fechada com sucesso em modo de segurança.`));
+                } catch (panicErr) {
+                    this.logger.error({ panicErr }, 'FATAL: Could not emergency close after failed SL update!');
+                }
             }
         }
     }

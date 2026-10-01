@@ -244,11 +244,25 @@ export class StrategyEngine {
                 qty: String(risk.qty),
             });
         } catch (err) {
-            this.logger.error({ err }, '🚨 CRITICAL: Failed to set initial stop loss!');
+            this.logger.error({ err }, '🚨 CRITICAL: Failed to set initial stop loss! Closing position immediately.');
             await this.telegram.notifyError(
-                'STOP LOSS FAILURE',
-                new Error(`URGENTE: Posição ${payload.symbol} aberta SEM STOP LOSS! SL deveria ser ${risk.slPrice}.`)
+                'EMERGENCY PANIC',
+                new Error(`FALHA CRÍTICA: Corretora recusou o Stop Loss! Fechando a posição ${payload.symbol} a mercado imediatamente para proteger o capital.`)
             );
+            
+            try {
+                const panicSide = exchangeSide === 'BUY' ? 'SELL' : 'BUY';
+                await this.exchange.placeOrder({
+                    symbol: payload.symbol,
+                    side: panicSide,
+                    qty: String(risk.qty),
+                    reduceOnly: true,
+                });
+                await this.telegram.notifyError('EMERGENCY PANIC', new Error(`Posição fechada com sucesso em modo de segurança.`));
+            } catch (panicErr) {
+                this.logger.error({ panicErr }, 'FATAL: Could not emergency close!');
+            }
+            return; // Abort saving the position to the DB so we don't track a closed position
         }
 
         // 6. Notify
