@@ -142,13 +142,14 @@ export class BinanceAdapter {
             symbol: params.symbol,
             side: slSide,
             type: 'STOP_MARKET',
-            stopPrice: params.stopLoss,
+            triggerPrice: params.stopLoss,
             reduceOnly: 'true',
             quantity: params.qty,
             workingType: 'MARK_PRICE',
+            algoType: 'CONDITIONAL',
         });
 
-        await this.post('/fapi/v1/order', qsParams.toString());
+        await this.post('/fapi/v1/algoOrder', qsParams.toString());
         this.logger.info({ symbol: params.symbol, stopLoss: params.stopLoss }, 'Trading stop set');
     }
 
@@ -204,9 +205,10 @@ export class BinanceAdapter {
             activationPrice: params.activationPrice,
             callbackRate: params.callbackRate,
             workingType: 'MARK_PRICE',
+            algoType: 'CONDITIONAL',
         });
 
-        await this.post('/fapi/v1/order', qsParams.toString());
+        await this.post('/fapi/v1/algoOrder', qsParams.toString());
         this.logger.info({ symbol: params.symbol, activationPrice: params.activationPrice, callbackRate: params.callbackRate }, 'Trailing stop set');
     }
 
@@ -220,9 +222,16 @@ export class BinanceAdapter {
         const qsParams = new URLSearchParams({ symbol });
         try {
             await this.delete('/fapi/v1/allOpenOrders', qsParams.toString());
-            this.logger.info({ symbol }, 'All open orders cancelled');
+            this.logger.info({ symbol }, 'All open standard orders cancelled');
         } catch (err) {
-            this.logger.warn({ err, symbol }, 'Failed to cancel all open orders');
+            this.logger.warn({ err, symbol }, 'Failed to cancel all open standard orders');
+        }
+
+        try {
+            await this.delete('/fapi/v1/algoOpenOrders', qsParams.toString());
+            this.logger.info({ symbol }, 'All open ALGO orders cancelled');
+        } catch (err) {
+            this.logger.warn({ err, symbol }, 'Failed to cancel all open ALGO orders');
         }
     }
 
