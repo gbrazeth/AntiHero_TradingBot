@@ -173,12 +173,10 @@ export class TpManager {
         await this.exchange.cancelAllOpenOrders(position.symbol);
 
         if (position.currentQty > 0) {
-            const exchangeSide = position.side === 'BUY' ? 'SELL' : 'BUY';
-            
             try {
                 await this.exchange.setTradingStop({
                     symbol: position.symbol,
-                    side: exchangeSide,
+                    side: position.side as 'BUY' | 'SELL',
                     stopLoss: String(slPrice),
                     qty: String(position.currentQty),
                 });
