@@ -12,10 +12,14 @@ const envSchema = z.object({
     // Database
     DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
 
-    // Binance
+    // Exchange (BloFin / Legacy Binance)
+    BLOFIN_API_KEY: z.string().default(''),
+    BLOFIN_API_SECRET: z.string().default(''),
+    BLOFIN_PASSPHRASE: z.string().default(''),
+    BLOFIN_BASE_URL: z.string().url().default('https://openapi.blofin.com'),
     BINANCE_API_KEY: z.string().default(''),
     BINANCE_API_SECRET: z.string().default(''),
-    BINANCE_BASE_URL: z.string().url('BINANCE_BASE_URL must be a valid URL'),
+    BINANCE_BASE_URL: z.string().default('https://fapi.binance.com'),
     MOCK_EXCHANGE: z
         .string()
         .default('false')

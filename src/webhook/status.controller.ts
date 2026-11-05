@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
-import { BinanceAdapter } from '../infra/binance-adapter.js';
+import { BloFinAdapter } from '../infra/blofin-adapter.js';
 import { prisma } from '../infra/prisma.js';
 import { env } from '../config/env.js';
 
 /**
- * Status routes — check Binance connection and current position.
+ * Status routes — check BloFin connection and current position.
  */
 export async function statusController(app: FastifyInstance): Promise<void> {
-    const exchange = new BinanceAdapter(app.log);
+    const exchange = new BloFinAdapter(app.log);
 
     // ── TEMPORARY RESET ENDPOINT ──────────────────────────────────────
     app.get('/status/reset', async (_request, reply) => {
@@ -33,7 +33,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
 
     /**
      * GET /status/position
-     * Fetches the current ETHUSDT position from Binance Testnet.
+     * Fetches the current ETHUSDT position from BloFin.
      * Use this to verify the API keys are working.
      */
     app.get('/status/position', async (_request, reply) => {
@@ -44,11 +44,11 @@ export async function statusController(app: FastifyInstance): Promise<void> {
                 return reply.status(200).send({
                     status: 'ok',
                     position: 'FLAT',
-                    message: 'No open ETHUSDT position on Binance Testnet',
+                    message: 'No open ETHUSDT position on BloFin',
                 });
             }
 
-            // Fetch local position to get the Stop Loss (which Binance v2/positionRisk hides)
+            // Fetch local position to get the Stop Loss
             const dbPos = await prisma.position.findFirst({
                 where: { symbol: 'ETHUSDT', status: 'open' },
             });
@@ -68,7 +68,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            app.log.error({ err }, 'Failed to fetch position from Binance');
+            app.log.error({ err }, 'Failed to fetch position from BloFin');
             return reply.status(500).send({
                 status: 'error',
                 message,
@@ -78,7 +78,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
 
     /**
      * GET /status/balance
-     * Fetches wallet balance from Binance Testnet.
+     * Fetches wallet balance from BloFin.
      */
     app.get('/status/balance', async (_request, reply) => {
         try {
@@ -86,7 +86,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             return reply.status(200).send({ status: 'ok', balance });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            app.log.error({ err }, 'Failed to fetch balance from Binance');
+            app.log.error({ err }, 'Failed to fetch balance from BloFin');
             return reply.status(500).send({ status: 'error', message });
         }
     });
@@ -193,7 +193,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             });
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
-            app.log.error({ err }, 'Failed to compute PnL summary');
+            app.log.error({ err }, 'Failed to fetch PnL summary');
             return reply.status(500).send({ status: 'error', message });
         }
     });
@@ -203,10 +203,11 @@ export async function statusController(app: FastifyInstance): Promise<void> {
      * Returns whether the bot is connected to testnet or mainnet.
      */
     app.get('/status/network', async (_request, reply) => {
-        const isMainnet = env.BINANCE_BASE_URL.includes('fapi.binance.com');
+        const isMainnet = !env.BLOFIN_BASE_URL.includes('demo');
         return reply.send({
+            exchange: 'BLOFIN',
             network: isMainnet ? 'mainnet' : 'testnet',
-            baseUrl: env.BINANCE_BASE_URL,
+            baseUrl: env.BLOFIN_BASE_URL,
         });
     });
 }

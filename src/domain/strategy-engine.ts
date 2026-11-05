@@ -2,20 +2,20 @@ import type { FastifyBaseLogger } from 'fastify';
 import type { WebhookPayload, WebhookEvent } from '../webhook/webhook.schema.js';
 import { prisma } from '../infra/prisma.js';
 import { RiskManager } from './risk-manager.js';
-import { BinanceAdapter } from '../infra/binance-adapter.js';
+import { BloFinAdapter } from '../infra/blofin-adapter.js';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';
 import { TpManager } from './tp-manager.js';
 import { env } from '../config/env.js';
 
 export class StrategyEngine {
     private readonly risk: RiskManager;
-    private readonly exchange: BinanceAdapter;
+    private readonly exchange: BloFinAdapter;
     private readonly telegram: TelegramNotifier;
     private readonly tpManager: TpManager;
 
     constructor(private readonly logger: FastifyBaseLogger) {
         this.risk = new RiskManager(logger);
-        this.exchange = new BinanceAdapter(logger);
+        this.exchange = new BloFinAdapter(logger);
         this.telegram = new TelegramNotifier(logger);
         this.tpManager = new TpManager(logger, this.exchange, this.telegram);
     }

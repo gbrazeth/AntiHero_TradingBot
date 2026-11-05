@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger } from 'fastify';
 import { prisma } from '../infra/prisma.js';
-import { BinanceAdapter } from '../infra/binance-adapter.js';
+import { BloFinAdapter } from '../infra/blofin-adapter.js';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';
 import { env } from '../config/env.js';
 
@@ -31,7 +31,7 @@ export class TpManager {
 
     constructor(
         private readonly logger: FastifyBaseLogger,
-        private readonly exchange: BinanceAdapter,
+        private readonly exchange: BloFinAdapter,
         private readonly telegram: TelegramNotifier
     ) {}
 
