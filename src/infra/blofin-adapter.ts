@@ -67,7 +67,7 @@ export class BloFinAdapter {
     constructor(private readonly logger: FastifyBaseLogger) {
         this.baseUrl = env.BLOFIN_BASE_URL.trim();
         this.apiKey = env.BLOFIN_API_KEY.trim();
-        this.apiSecret = env.BLOFIN_API_SECRET.trim();
+        this.apiSecret = (env.BLOFIN_API_SECRET || env.BLOFIN_API_SEC).trim();
         this.passphrase = env.BLOFIN_PASSPHRASE.trim();
     }
 

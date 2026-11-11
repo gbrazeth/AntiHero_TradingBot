@@ -210,7 +210,7 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             baseUrl: env.BLOFIN_BASE_URL,
             authConfigured: {
                 keyLen: env.BLOFIN_API_KEY.trim().length,
-                secretLen: env.BLOFIN_API_SECRET.trim().length,
+                secretLen: (env.BLOFIN_API_SECRET || env.BLOFIN_API_SEC).trim().length,
                 passLen: env.BLOFIN_PASSPHRASE.trim().length,
             },
         });

@@ -15,6 +15,7 @@ const envSchema = z.object({
     // Exchange (BloFin / Legacy Binance)
     BLOFIN_API_KEY: z.string().default(''),
     BLOFIN_API_SECRET: z.string().default(''),
+    BLOFIN_API_SEC: z.string().default(''),
     BLOFIN_PASSPHRASE: z.string().default(''),
     BLOFIN_BASE_URL: z.string().url().default('https://openapi.blofin.com'),
     BINANCE_API_KEY: z.string().default(''),
