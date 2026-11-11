@@ -208,6 +208,11 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             exchange: 'BLOFIN',
             network: isMainnet ? 'mainnet' : 'testnet',
             baseUrl: env.BLOFIN_BASE_URL,
+            authConfigured: {
+                keyLen: env.BLOFIN_API_KEY.trim().length,
+                secretLen: env.BLOFIN_API_SECRET.trim().length,
+                passLen: env.BLOFIN_PASSPHRASE.trim().length,
+            },
         });
     });
 }

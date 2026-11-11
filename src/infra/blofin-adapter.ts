@@ -65,10 +65,10 @@ export class BloFinAdapter {
     private readonly configuredInstruments = new Set<string>();
 
     constructor(private readonly logger: FastifyBaseLogger) {
-        this.baseUrl = env.BLOFIN_BASE_URL;
-        this.apiKey = env.BLOFIN_API_KEY;
-        this.apiSecret = env.BLOFIN_API_SECRET;
-        this.passphrase = env.BLOFIN_PASSPHRASE;
+        this.baseUrl = env.BLOFIN_BASE_URL.trim();
+        this.apiKey = env.BLOFIN_API_KEY.trim();
+        this.apiSecret = env.BLOFIN_API_SECRET.trim();
+        this.passphrase = env.BLOFIN_PASSPHRASE.trim();
     }
 
     // ── Symbol & Contract Conversion Helpers ─────────────────────────────
@@ -371,7 +371,7 @@ export class BloFinAdapter {
      */
     private buildHeaders(method: 'GET' | 'POST', requestPath: string, bodyString = ''): Record<string, string> {
         const timestamp = Date.now().toString();
-        const nonce = crypto.randomUUID();
+        const nonce = timestamp;
         const prehash = `${requestPath}${method}${timestamp}${nonce}${bodyString}`;
 
         const hexSignature = crypto
@@ -381,14 +381,19 @@ export class BloFinAdapter {
 
         const accessSign = Buffer.from(hexSignature, 'utf-8').toString('base64');
 
-        return {
+        const headers: Record<string, string> = {
             'ACCESS-KEY': this.apiKey,
             'ACCESS-SIGN': accessSign,
             'ACCESS-TIMESTAMP': timestamp,
             'ACCESS-NONCE': nonce,
             'ACCESS-PASSPHRASE': this.passphrase,
-            'Content-Type': 'application/json',
         };
+
+        if (method === 'POST') {
+            headers['Content-Type'] = 'application/json';
+        }
+
+        return headers;
     }
 
     private async post<T>(path: string, bodyObj: unknown, attempt = 1): Promise<T> {
