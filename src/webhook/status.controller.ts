@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { BloFinAdapter } from '../infra/blofin-adapter.js';
+import { StrategyEngine } from '../domain/strategy-engine.js';
 import { prisma } from '../infra/prisma.js';
 import { env } from '../config/env.js';
 
@@ -208,11 +209,23 @@ export async function statusController(app: FastifyInstance): Promise<void> {
             exchange: 'BLOFIN',
             network: isMainnet ? 'mainnet' : 'testnet',
             baseUrl: env.BLOFIN_BASE_URL,
+            nativeScannerEnabled: env.NATIVE_SCANNER_ENABLED,
             authConfigured: {
                 keyLen: env.BLOFIN_API_KEY.trim().length,
                 secretLen: (env.BLOFIN_API_SECRET || env.BLOFIN_API_SEC).trim().length,
                 passLen: env.BLOFIN_PASSPHRASE.trim().length,
             },
+        });
+    });
+
+    /**
+     * GET /status/scanner
+     * Returns real-time SMA(9) and WMA(250) values calculated directly from BloFin 1H candles.
+     */
+    app.get('/status/scanner', async (_request, reply) => {
+        return reply.send({
+            status: 'ok',
+            scanner: StrategyEngine.getScannerSnapshot(),
         });
     });
 }

@@ -5,28 +5,50 @@ import { RiskManager } from './risk-manager.js';
 import { BloFinAdapter } from '../infra/blofin-adapter.js';
 import { TelegramNotifier } from '../infra/telegram-notifier.js';
 import { TpManager } from './tp-manager.js';
+import { MarketScanner, type ScannerSnapshot } from './market-scanner.js';
 import { env } from '../config/env.js';
 
 export class StrategyEngine {
+    private static latestScannerSnapshot: ScannerSnapshot | null = null;
+
     private readonly risk: RiskManager;
     private readonly exchange: BloFinAdapter;
     private readonly telegram: TelegramNotifier;
     private readonly tpManager: TpManager;
+    private readonly scanner: MarketScanner;
 
     constructor(private readonly logger: FastifyBaseLogger) {
         this.risk = new RiskManager(logger);
         this.exchange = new BloFinAdapter(logger);
         this.telegram = new TelegramNotifier(logger);
         this.tpManager = new TpManager(logger, this.exchange, this.telegram);
+        this.scanner = new MarketScanner(logger, this.exchange, (payload, signalId) =>
+            this.handleSignal(payload, signalId)
+        );
+    }
+
+    public static getScannerSnapshot(): ScannerSnapshot | null {
+        return StrategyEngine.latestScannerSnapshot;
     }
 
     public startPolling(): void {
+        // Run initial scan immediately on boot
+        this.pollPositions().catch(err => this.logger.error({ err }, 'Initial polling error'));
+
         setInterval(() => {
             this.pollPositions().catch(err => this.logger.error({ err }, 'Polling error'));
         }, 15000);
     }
 
     private async pollPositions(): Promise<void> {
+        // 1. Native Market Scanner (SMA 9 x WMA 250 on BloFin 1H candles)
+        try {
+            StrategyEngine.latestScannerSnapshot = await this.scanner.scanOnce();
+        } catch (err) {
+            this.logger.error({ err }, 'Native MarketScanner error');
+        }
+
+        // 2. Sync & check TPs for open positions
         const openPositions = await prisma.position.findMany({ where: { status: 'open' } });
         for (const pos of openPositions) {
             await this.syncPositionState(pos.symbol);

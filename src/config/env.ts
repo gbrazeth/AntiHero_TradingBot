@@ -31,6 +31,14 @@ const envSchema = z.object({
     TELEGRAM_CHAT_ID: z.string().default(''),
     TELEGRAM_CHAT_ID_2: z.string().default(''),
 
+    // Native Strategy Scanner (replaces TradingView Webhooks)
+    NATIVE_SCANNER_ENABLED: z
+        .string()
+        .default('true')
+        .transform((val) => val === 'true' || val === '1'),
+    SCANNER_SYMBOL: z.string().default('ETHUSDT'),
+    SCANNER_TIMEFRAME: z.string().default('1H'),
+
     // Trading Parameters
     SL_PCT: z.coerce.number().default(0.01),
     WMA_FILTER_PCT: z.coerce.number().default(0.02),  // 2% distance filter

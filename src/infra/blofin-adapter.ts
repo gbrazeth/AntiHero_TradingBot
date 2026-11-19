@@ -361,6 +361,42 @@ export class BloFinAdapter {
             }));
     }
 
+    /**
+     * Fetches historical OHLCV candles from BloFin public market API.
+     * Returned in chronological order (oldest -> newest, last element is current forming bar).
+     */
+    async getCandles(symbol: string, bar = '1H', limit = 300): Promise<Array<{
+        timestamp: number;
+        open: number;
+        high: number;
+        low: number;
+        close: number;
+        volume: number;
+        confirm: boolean;
+    }>> {
+        const instId = this.toInstId(symbol);
+        const url = `${this.baseUrl}/api/v1/market/candles?instId=${encodeURIComponent(instId)}&bar=${encodeURIComponent(bar)}&limit=${limit}`;
+
+        const res = await fetch(url);
+        if (!res.ok) {
+            throw new Error(`BloFin getCandles HTTP ${res.status}`);
+        }
+        const json = (await res.json()) as BloFinResponse<string[][]>;
+        this.assertSuccess(json, '/api/v1/market/candles');
+
+        const raw = json.data ?? [];
+        // BloFin returns newest first, so reverse to oldest -> newest
+        return raw.slice().reverse().map((c) => ({
+            timestamp: Number(c[0]),
+            open: Number(c[1]),
+            high: Number(c[2]),
+            low: Number(c[3]),
+            close: Number(c[4]),
+            volume: Number(c[5]),
+            confirm: c[8] === '1',
+        }));
+    }
+
     // ── Private HTTP & Auth Helpers ──────────────────────────────────────
 
     /**
