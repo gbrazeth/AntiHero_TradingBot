@@ -184,6 +184,7 @@ export class BloFinAdapter {
             side: params.side.toLowerCase(),
             orderType: 'market',
             size: contractSize,
+            brokerId: 'ec6dd3a7dd982d0b',
         };
 
         if (params.reduceOnly) {
@@ -291,6 +292,7 @@ export class BloFinAdapter {
             slTriggerPriceType: 'mark',
             size: '-1',         // Entire remaining position
             reduceOnly: 'true',
+            brokerId: 'ec6dd3a7dd982d0b',
         };
 
         await this.post('/api/v1/trade/order-tpsl', body);

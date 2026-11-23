@@ -183,7 +183,13 @@ export class MarketScanner {
             '🚀 Native MarketScanner triggered SMA9 x WMA250 signal!'
         );
 
-        await this.onSignal(payload, signal.id);
+        try {
+            await this.onSignal(payload, signal.id);
+        } catch (err) {
+            // Delete failed signal record so the scanner can retry once transient/API issue is resolved
+            await prisma.signal.delete({ where: { id: signal.id } }).catch(() => {});
+            throw err;
+        }
         return this.lastSnapshot;
     }
 
