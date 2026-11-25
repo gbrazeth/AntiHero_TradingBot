@@ -38,6 +38,14 @@ export class StrategyEngine {
         setInterval(() => {
             this.pollPositions().catch(err => this.logger.error({ err }, 'Polling error'));
         }, 15000);
+
+        // Keep-alive self-ping every 10 minutes for Render Free Tier (prevents 15-min inactivity spin-down)
+        const publicUrl = process.env.RENDER_EXTERNAL_URL || 'https://antihero-tradingbot.onrender.com';
+        setInterval(() => {
+            fetch(`${publicUrl}/status/scanner`)
+                .then(res => this.logger.debug({ status: res.status }, 'Keep-alive self-ping ok'))
+                .catch(err => this.logger.warn({ err }, 'Keep-alive self-ping failed'));
+        }, 10 * 60 * 1000);
     }
 
     private async pollPositions(): Promise<void> {
