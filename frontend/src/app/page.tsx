@@ -56,14 +56,34 @@ interface PnlSummary {
   partialProfitsTaken: number;
 }
 
+interface ScannerData {
+  enabled: boolean;
+  symbol: string;
+  timeframe: string;
+  lastCheckAt: string | null;
+  closePrice: number | null;
+  sma9: number | null;
+  wma250: number | null;
+  trend: string;
+  distanceFromWmaPct: number | null;
+}
+
 const EVENT_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
   ENTRY: { emoji: '🟢', label: 'Entry', color: 'text-success' },
+  TP1_HIT: { emoji: '🎯', label: 'TP1 Hit (10%)', color: 'text-success' },
+  TP2_HIT: { emoji: '🎯', label: 'TP2 Hit (25%)', color: 'text-success' },
+  TP3_HIT: { emoji: '🎯', label: 'TP3 Hit (50%)', color: 'text-success' },
+  TP4_HIT: { emoji: '🎯', label: 'TP4 Hit (100%)', color: 'text-success' },
+  TP5_HIT: { emoji: '🎯', label: 'TP5 Hit (200%)', color: 'text-success' },
+  TP6_HIT: { emoji: '🏆', label: 'TP6 Hit (300%)', color: 'text-success' },
   PARTIAL_TP: { emoji: '🔶', label: 'Partial TP', color: 'text-warning' },
   PARTIAL_EXIT: { emoji: '🔶', label: 'Partial Exit', color: 'text-warning' },
   BREAK_EVEN: { emoji: '⚡', label: 'Break-Even', color: 'text-accent' },
   SL_HIT: { emoji: '🔴', label: 'Stop Loss', color: 'text-danger' },
+  CLOSED: { emoji: '⬜', label: 'Closed', color: 'text-secondary' },
   FULL_CLOSE: { emoji: '⬜', label: 'Full Close', color: 'text-secondary' },
   REVERSAL: { emoji: '🔄', label: 'Reversal', color: 'text-accent' },
+  'Close (Reversal)': { emoji: '🔄', label: 'Reversal Close', color: 'text-accent' },
 };
 
 export default function Dashboard() {
@@ -72,6 +92,7 @@ export default function Dashboard() {
   const [history, setHistory] = useState<HistoryPosition[]>([]);
   const [tradeLogs, setTradeLogs] = useState<TradeLogEntry[]>([]);
   const [pnlSummary, setPnlSummary] = useState<PnlSummary | null>(null);
+  const [scanner, setScanner] = useState<ScannerData | null>(null);
   const [network, setNetwork] = useState<'testnet' | 'mainnet'>('testnet');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -151,6 +172,17 @@ export default function Dashboard() {
         }
       } catch (err) {
         console.error('Network fetch error:', err);
+      }
+
+      // Fetch Native Scanner
+      try {
+        const scanRes = await fetch(`${API_URL}/status/scanner`);
+        if (scanRes.ok) {
+          const scanData = await scanRes.json();
+          setScanner(scanData.scanner || null);
+        }
+      } catch (err) {
+        console.error('Scanner fetch error:', err);
       }
       
       setError(null);
@@ -322,7 +354,11 @@ export default function Dashboard() {
               <div className="badge flat badge-inline">
                 FLAT / NO POSITION
               </div>
-              <span className="stat-label">Waiting for TradingView signals...</span>
+              <span className="stat-label">
+                {scanner?.closePrice
+                  ? `BloFin 1H Scanner: ETH $${scanner.closePrice.toFixed(2)} | SMA9: ${scanner.sma9} | WMA250: ${scanner.wma250}`
+                  : 'Scanning BloFin 1H candles (SMA9 x WMA250)...'}
+              </span>
             </div>
           ) : (
             <>
